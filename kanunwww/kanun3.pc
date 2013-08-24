@@ -1,0 +1,234 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "cgi.h"
+#include "wwwtools.h"
+
+#define SQL_ERROR       sqlca.sqlcode < 0
+#define SQL_NOTFOUND    sqlca.sqlcode == 1403
+#define SQL_MESSAGE     sqlca.sqlerrm.sqlerrmc
+
+EXEC SQL BEGIN DECLARE SECTION;
+
+VARCHAR uid[10];
+VARCHAR pwd[10];
+char    dbname[10]="y1";
+
+
+char daireno[4];
+char esasno[10];
+char donem[2];
+char madde[16];
+char kanun[256];
+long kanunno;
+
+/*char kmetin[1024*100];
+*/
+char kdaireno[4];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+long count1;
+char nakeddaire[4];
+char dresseddaire[4];
+EXEC SQL END DECLARE SECTION;
+
+char textdaire[30];
+
+EXEC SQL INCLUDE SQLCA;
+
+/*----------------------------------*/
+
+/*----------------------------------*/
+typedef struct dt{
+	char	*code;
+	char	*name;
+}daireler_t;
+
+daireler_t daireler[]={
+/*	"",	"Tüm daireler",*/
+	"1c",	"1. Ceza dairesi",
+	"2c",	"2. Ceza dairesi",
+	"3c",	"3. Ceza dairesi",
+	"4c",	"4. Ceza dairesi",
+	"5c",	"5. Ceza dairesi",
+	"6c",	"6. Ceza dairesi",
+	"7c",	"7. Ceza dairesi",
+	"8c",	"8. Ceza dairesi",
+	"9c",	"9. Ceza dairesi",
+	"10c",	"10. Ceza dairesi",
+	"11c",	"11. Ceza dairesi",
+	"1h",	"1. Hukuk dairesi",
+	"2h",	"2. Hukuk dairesi",
+	"3h",	"3. Hukuk dairesi",
+	"4h",	"4. Hukuk dairesi",
+	"5h",	"5. Hukuk dairesi",
+	"6h",	"6. Hukuk dairesi",
+	"7h",	"7. Hukuk dairesi",
+	"8h",	"8. Hukuk dairesi",
+	"9h",	"9. Hukuk dairesi",
+	"10h",	"10. Hukuk dairesi",
+	"11h",	"11. Hukuk dairesi",
+	"12h",	"12. Hukuk dairesi",
+	"13h",	"13. Hukuk dairesi",
+	"14h",	"14. Hukuk dairesi",
+	"15h",	"15. Hukuk dairesi",
+	"16h",	"16. Hukuk dairesi",
+	"17h",	"17. Hukuk dairesi",
+	"18h",	"18. Hukuk dairesi",
+	"19h",	"19. Hukuk dairesi",
+	"20h",	"20. Hukuk dairesi",
+	"21h",	"21. Hukuk dairesi",
+	"cgk",	"Ceza Genel Kurulu",
+	"hgk",	"Hukuk Genel Kurulu",
+	"yik",	"Ýçtihadý Birleþtirme Kurulu",
+	NULL,NULL
+};
+/*----------------------------------*/
+/*----------------------------------*/
+char *cgiDebug;
+
+cgiMain()
+{
+	int i;
+	int waswhere = 0;
+	int nosonuc = 0;
+	int firsttime = 1;
+	int nodaire=1;
+
+
+        putenv("ORACLE_SID=yargitay");
+        putenv("ORACLE_HOME=/u01/oracle/product/8.0.5");
+        putenv("LD_LIBRARY_PATH=/u01/oracle/product/8.0.5/lib");
+        putenv("NLS_LANG=TURKISH_TURKEY.WE8ISO8859P9");
+
+        strcpy (uid.arr,"sorgu");
+        uid.len=strlen(uid.arr);
+        strcpy (pwd.arr,"sorgu");
+        pwd.len=strlen(pwd.arr);
+
+        cgiHeaderContent("text/html");
+        cgiHtmlHead("T.C. Yargýtay Emsal kararlarý kanuna göre arama");
+        cgiPrintf(
+        "<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-9\">");
+	cgiPrintf(
+	"<BODY TEXT=\"#ffffff\" BGCOLOR=\"#000000\" LINK=\"#FF0000\""
+	" VLINK=\"#3333FF\""
+	"ALINK=\"#FF0000\">"
+	"<center>"
+	"</img><img src=\"http://yargitay.gov.tr/images/yargi.JPG\"></img>"
+	"<br>"
+	"Ana sayfa için <a href=\"http://www.yargitay.gov.tr/\">http://www.yargitay.gov.tr</a>"
+	" týklayýnýz" 
+        "</center>"
+	"<HR>");
+
+        cgiPrintf("<h2>Emsal Kararlarý Kanuna Göre Arama</h2>");
+        cgiPrintf("Esas Numarasýna týklayarak karara "
+                "ulaþabilirsiniz.<br>"
+                "Görüþ ve önerileriniz için <a href=\"mailto:teknik@yargitay.gov.tr\">"
+                "teknik@yargitay.gov.tr</a><br><br>");
+
+        EXEC SQL CONNECT :uid IDENTIFIED BY :pwd USING :dbname;
+	if(SQL_ERROR){
+		cgiPrintf("Veritabaný þu an bakým altýnda. Sonra deneyin. <p>BÝM");
+		exit(0);
+	}
+
+        if(cgiFormGetVal("daire")){
+                strcpy(textdaire,          cgiFormGetVal("daire"));
+                if(textdaire[0]!=0){
+                        for(i=0;daireler[i].code;i++){
+                                if(strcmp(daireler[i].code,textdaire)==0){
+                                        cgiPrintf("<strong>Daire:</strong> %s<br>",daireler[i].name);
+                                        break;
+                                }
+                        }
+                        nodaire = 0;
+                }else nodaire = 1;
+        }else nodaire = 1;
+
+        if(cgiFormGetVal("kanun")){
+                strcpy(kanun,          cgiFormGetVal("kanun"));
+                cgiPrintf("<strong>Kanun:</strong> %s<br>",kanun);
+        }
+        if(cgiFormGetVal("madde")){
+                strcpy(madde,          cgiFormGetVal("madde"));
+                cgiPrintf("<strong>Madde:</strong> %s<br>",madde);
+        }
+
+
+	if(nodaire){
+		EXEC SQL DECLARE kcura CURSOR FOR
+			SELECT esasno, daireno
+			FROM emsal.kanun
+			WHERE kanun=:kanun AND
+				madde=:madde
+		;
+	}else{
+		strcpy(daireno,textdaire);
+		EXEC SQL DECLARE kcur CURSOR FOR
+			SELECT esasno, daireno
+			FROM emsal.kanun
+			WHERE daireno=:daireno AND
+				kanun=:kanun AND
+				madde=:madde
+		;
+	}
+
+	if(nodaire){
+		EXEC SQL OPEN kcura;
+	}else{
+		EXEC SQL OPEN kcur;
+	}
+	
+	cgiPrintf("<TABLE>");
+	cgiPrintf("<TR><TD><strong>Daire</strong></TD><TD><strong>Esas numarasý</strong></TD></TR>");
+	while(1){
+		if(nodaire){
+			EXEC SQL FETCH kcura 
+				INTO :esasno:ind0, :daireno:ind1;
+		}else{
+			EXEC SQL FETCH kcur 
+				INTO :esasno:ind0, :daireno:ind1;
+		}
+		if(SQL_ERROR){
+			cgiPrintf(SQL_MESSAGE);
+			exit(1);
+		}
+		if(SQL_NOTFOUND)break;
+		cgiPrintf("<TR><TD>");
+                for(i=0;daireler[i].code;i++){
+                        if(strcmp(daireler[i].code,daireno)==0){
+                                cgiPrintf(daireler[i].name);
+                                break;
+                        }
+                }
+		cgiPrintf("</TD>"
+			"<TD><A HREF=\"kanun4?daire=%s&esasno=%s\">"
+			"%s</A></TD></TR>",
+			cgiEncodeUrl(daireno),
+			cgiEncodeUrl(esasno), esasno);
+	}
+	cgiPrintf("</TABLE>");
+	if(nodaire){
+		EXEC SQL CLOSE kcur;
+	}else{
+		EXEC SQL CLOSE kcura;
+	}
+
+}
+errprint()
+{
+   /* EXEC SQL WHENEVER SQLERROR CONTINUE;*/
+    cgiPrintf("<b>Veritabaný hatasý:</b>");
+    cgiPrintf("%s\n",sqlca.sqlerrm.sqlerrmc);
+    exit(1);
+}
+

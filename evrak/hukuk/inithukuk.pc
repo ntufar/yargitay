@@ -1,0 +1,138 @@
+/*
+ *  evrak/hukuk/inithukuk.pc
+ *
+ *  Copyright (C) 1998, 1999 Nicholas Tufar
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include "yf.h"
+#include "tools.h"
+#include "hukuk.h"
+EXEC SQL BEGIN DECLARE SECTION;
+VARCHAR db_name[10];
+VARCHAR uid[10];
+VARCHAR pwd[10];
+char DB_NAME[10] = "y1";
+EXEC SQL END DECLARE SECTION;
+EXEC SQL INCLUDE SQLCA;
+
+
+yf *cgir;
+yf *csor;
+yf *sgir;
+yf *skapatilmayan;
+yf *fkptlmynlist;
+yf *teslimlst;
+yf *mahlist;
+yf *rehber;
+
+ym *maciklama;
+ym *mdosya;
+ym *mhukukmenu;
+
+char user[30];
+char home[255];
+char daire[21];
+char tarih[11];
+char yil[3];
+char yyil[3];
+int  superuser;
+
+inithukuk()
+{
+	int i;
+
+	/* Get time */
+	refreshtime();
+	
+	cgir = initform("cgir.frm");
+	if(cgir == NULL)return 0;
+	csor = initform("csor.frm");
+	if(csor == NULL)return 0;
+	sgir = initform("sgir.frm");
+	if(sgir == NULL)return 0;
+	skapatilmayan = initform("skapatilmayan.frm");
+	if(skapatilmayan == NULL) return 0;
+	fkptlmynlist = initform("kptlmynlist.frm");
+	if(fkptlmynlist == NULL) return 0;
+	teslimlst = initform("teslimlst.frm");
+	if(teslimlst == NULL) return 0;
+	mahlist = initform("mahlist.frm");
+	if(mahlist == NULL) return 0;
+	rehber = initform("rehber.frm");
+	if(rehber == NULL) return 0;
+
+	maciklama = initmenu("aciklama.mnu");
+	if(maciklama == NULL) return 0;
+
+	mdosya = initmenu("dosya.mnu");
+	if(mdosya == NULL) return 0;
+
+	mhukukmenu = initmenu("hukukmenu.mnu");
+	if (mhukukmenu == NULL) return 0;
+
+	putenv("ORACLE_SID=yargitay");
+        putenv("ORACLE_HOME=/u01/oracle/product/8.0.5");
+        putenv("LD_LIBRARY_PATH=/u01/oracle/product/8.0.5/lib");
+        putenv("NLS_LANG=TURKISH_TURKEY.WE8ISO8859P9");
+	putenv("TERM=vt100");
+	strcpy(user, getlogin());
+	strcpy(home,getenv("HOME"));
+
+        strcpy (uid.arr,"hukuk");
+        uid.len=strlen(uid.arr);
+        strcpy (pwd.arr,"hukuk");
+        pwd.len=strlen(pwd.arr);
+        strcpy (db_name.arr,"y1");
+        db_name.len=strlen(db_name.arr);
+
+	printf("Sisteme baðlanýlýyor...");
+	fflush(stdout);
+        EXEC SQL CONNECT :uid IDENTIFIED BY :pwd /*AT :DB_NAME*/ USING :db_name;
+	if(SQL_ERROR){
+		ntlog(LOG_HUKUK, SQL_MESSAGE);
+		printf("\nVeritabaný eriþilmiyor\n");
+		printf(SQL_MESSAGE);
+		exit(0);
+	}
+	printf("baðlandý\n");
+	printf("Kullanýcý '%s' tanýtýlýyor...",user);
+	fflush(stdout);
+	dress(user,20);
+        EXEC SQL
+		 select dairekodu into :daire from genel.kullanicilar where
+                	kullanicikodu = :user ;
+	if(SQL_ERROR){
+		ntlog(LOG_HUKUK, SQL_MESSAGE);
+		printf("\nVeritabaný eriþilmiyor\n");
+		printf(SQL_MESSAGE);
+		exit(0);
+	}
+	if(SQL_NOTFOUND){
+		printf("\n'%s' kullanýcýnýn sisteme eriþme hakký yoktur\n",
+			strip(user));
+		exit(0);
+	}
+	printf("tamam\n");
+	if(strcmp(daire,"adm")==0){
+		superuser=1;
+		strcpy(daire,"99h");
+	} else superuser=0;
+
+
+        inityf();
+	nthareket("hukuk: kullanici %s baglandi", strip(user));
+
+	return 1;
+}
+/**********************************************************/
+shuthukuk()
+{
+	shutyf();
+	EXEC SQL COMMIT RELEASE;
+}
+

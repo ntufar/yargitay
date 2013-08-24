@@ -1,0 +1,155 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "cgi.h"
+#include "wwwtools.h"
+
+#define SQL_ERROR       sqlca.sqlcode < 0
+#define SQL_NOTFOUND    sqlca.sqlcode == 1403
+#define SQL_MESSAGE     sqlca.sqlerrm.sqlerrmc
+
+EXEC SQL BEGIN DECLARE SECTION;
+VARCHAR uid[10];
+VARCHAR pwd[10];
+char    dbname[10]="y1";
+
+char daireno[4];
+char esasno[10];
+char kavram[76];
+
+char kmetin[1024*100];
+
+char kdaireno[4];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+long count1;
+char nakeddaire[4];
+char dresseddaire[5];
+EXEC SQL END DECLARE SECTION;
+
+char textdaire[30];
+
+EXEC SQL INCLUDE SQLCA;
+
+/*----------------------------------*/
+/*----------------------------------*/
+char *cgiDebug;
+
+cgiMain()
+{
+	int i;
+	int waswhere = 0;
+	int nosonuc = 0;
+	int firsttime = 1;
+	int nodaire=1;
+
+
+        putenv("ORACLE_SID=yargitay");
+        putenv("ORACLE_HOME=/u01/oracle/product/8.0.5");
+        putenv("LD_LIBRARY_PATH=/u01/oracle/product/8.0.5/lib");
+        putenv("NLS_LANG=TURKISH_TURKEY.WE8ISO8859P9");
+
+        strcpy (uid.arr,"sorgu");
+        uid.len=strlen(uid.arr);
+        strcpy (pwd.arr,"sorgu");
+        pwd.len=strlen(pwd.arr);
+
+        cgiHeaderContent("text/html");
+        cgiHtmlHead("T.C. Yargýtay Emsal Kararlarý kanuna göre arama");
+        cgiPrintf(
+        "<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-9\">");
+	cgiPrintf(
+	"<BODY TEXT=\"#ffffff\" BGCOLOR=\"#000000\" LINK=\"#FF0000\""
+	" VLINK=\"#3333FF\""
+	"ALINK=\"#FF0000\">"
+	"<center>"
+	"</img><img src=\"http://yargitay.gov.tr/images/yargi.JPG\"></img>"
+	"<br>"
+	"Ana sayfa için <a href=\"http://www.yargitay.gov.tr/\">http://www.yargitay.gov.tr</a>"
+	" týklayýnýz" 
+        "</center>"
+	"<HR>");
+
+        EXEC SQL CONNECT :uid IDENTIFIED BY :pwd USING :dbname;
+	if(SQL_ERROR){
+		cgiPrintf("Veritabaný þu an bakým altýnda. Sonra deneyin. <p>BÝM");
+		exit(0);
+	}
+	if(cgiFormGetVal("daire")){
+		strcpy(textdaire,          cgiFormGetVal("daire"));
+		/*cgiPrintf(textdaire);*/
+	} 
+	if(cgiFormGetVal("esasno")){
+		strcpy(kesasno,          cgiFormGetVal("esasno"));
+		/*cgiPrintf(kesasno);*/
+	}
+
+	EXEC SQL DECLARE kcur CURSOR FOR
+		SELECT metin
+		FROM emsal.karar
+		WHERE daireno=:textdaire AND
+			esasno=:kesasno
+	;
+	if(SQL_ERROR||SQL_NOTFOUND){
+		cgiPrintf(SQL_MESSAGE);
+		exit(1);
+	}
+	EXEC SQL OPEN kcur;
+	EXEC SQL FETCH kcur 
+			INTO :kmetin:ind0;
+
+	if(SQL_ERROR||SQL_NOTFOUND){
+		cgiPrintf(SQL_MESSAGE);
+		exit(1);
+	}
+	for(i=0;kmetin[i];i++){
+		if(kmetin[i]=='\n'||kmetin[i]=='\r')
+			cgiPrintf("<p>\n");
+		else
+			printf("%c",kmetin[i]);
+	}
+
+	/*cgiPrintf("<pre>%s</pre>",kmetin);*/
+		
+/*	
+	cgiPrintf("<TABLE>");
+	cgiPrintf("<TR><TD>Daire</TD><TD>Esas sýra numarasý</TD></TR>");
+	while(1){
+		if(nodaire){
+			EXEC SQL FETCH kcurnd
+				INTO :kesasno:ind0, :kdaireno:ind1
+			;
+		}else{
+			EXEC SQL FETCH kcur 
+				INTO :kesasno:ind0, :kdaireno:ind1
+			;
+		}
+		if(SQL_ERROR){
+			cgiPrintf("Holario");
+			exit(1);
+		}
+		if(SQL_NOTFOUND)break;
+		cgiPrintf("<TR><TD>%s</TD><TD>"
+			"<A HREF=\"/kavram/kavram3?esasno=%s\">%s</A></TD></TR>",
+			kdaireno,cgiEncodeUrl(kesasno), kesasno);
+
+	}
+	cgiPrintf("</TABLE>");
+*/
+
+}
+errprint()
+{
+   /* EXEC SQL WHENEVER SQLERROR CONTINUE;*/
+    cgiPrintf("<b>Veritabaný hatasý:</b>");
+    cgiPrintf("%s\n",sqlca.sqlerrm.sqlerrmc);
+    exit(1);
+}
+

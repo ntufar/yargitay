@@ -1,0 +1,122 @@
+#include <stdio.h>
+#include <string.h>
+#include <thor.h>
+#include <yf.h>
+EXEC SQL BEGIN DECLARE SECTION;
+VARCHAR uid[10];
+VARCHAR pwd[10];
+char metin[1024*1000];
+char daireno[100];
+char esasno[10];
+char kararno[9];
+char ftarih[11];
+char giristar[11];
+char dergi[2];
+EXEC SQL END DECLARE SECTION;
+EXEC SQL INCLUDE SQLCA;
+
+
+/* theese are dummy */
+char mydir[255];
+char yil[3];
+char yyil[3];
+char tarih[11];
+
+
+
+const char dos[]="áßçîüÅÄ¶òôûö";
+const char iso[]="Á˝ˆ˛¸«–›÷ﬁ‹";
+yf *faktar;
+
+/************/
+/*#define DOCDIR "/home/proje/"
+#define ARCDIR "/home/proje/aktarilmis/"*/
+
+#define DOCDIR "/home/nt/proje/"
+#define ARCDIR "/home/nt/proje/aktarilmis/"
+
+
+main(argc, argv)
+	int argc;
+	char **argv;
+{
+	char buf[300];
+	char filename[300];
+	char *b1,*b2,*b3;
+	int c;
+	int count = 0;
+	int stat;
+	FILE *inf;
+	char **filelist;
+	int i=0;
+	int fp;
+
+        strcpy (uid.arr,"emsal");
+        uid.len=strlen(uid.arr);
+        strcpy (pwd.arr,"emsal");
+        pwd.len=strlen(pwd.arr);
+	EXEC SQL CONNECT :uid IDENTIFIED BY :pwd;
+        if(sqlca.sqlcode < 0){
+		printf(sqlca.sqlerrm.sqlerrmc);
+		exit(1);
+	}
+	
+
+	inityf();
+	faktar = initform("aktar.frm");
+	if(faktar == NULL){
+		printf("Ba˛lang˝Áta hata\n");
+		exit(1);
+	}
+	initthor(14,79,10,0);
+	filelist=initfilelist(DOCDIR);
+	strcpy(filename,DOCDIR);
+	strcat(filename,filelist[0]);
+	thorsetloft(filelist[0]);
+	thorreadfile(filename);
+
+	clearform(faktar);
+	showform(faktar);
+	repaintthor();
+	while(1){
+		refreshtime();
+		strcpy(faktar->ifs[4].text,tarih);
+		showform(faktar);
+		outputform(faktar);
+		if(i == Totalfiles) break;
+		strcpy(filename,DOCDIR);
+		strcat(filename,filelist[i]);
+		thorreadfile(filename);
+		sprintf(buf, "%s\t%d/%d",filelist[i],i+1,Totalfiles+1);
+		i++;
+		thorsetloft(buf);
+		repaintthor();
+		stat = inputform(faktar);
+		if(faktar->ifs[5].text[0]=='E'||faktar->ifs[5].text[0]=='e'){
+			/*----------- doaktar -------------*/
+			strcpy(daireno, faktar->ifs[0].text);
+			strcpy(esasno,	faktar->ifs[1].text);
+			strcpy(kararno,	faktar->ifs[2].text);
+			strcpy(ftarih,	faktar->ifs[3].text);
+			strcpy(giristar,faktar->ifs[4].text);
+			inf=fopen(filename,"r");
+			for(fp=0;!feof(inf);fp++)
+				metin[fp]=fgetc(inf);
+			fclose(inf);
+			metin[fp-1]=0;
+			strdos2iso(metin);
+			inf=fopen("abracadabra","w");
+			fprintf(inf,metin);
+			fclose(inf);
+			printw(metin);
+			refresh();
+			sleep(5);
+			
+			/*----------- doaktar -------------*/
+		}
+		if(stat == 0) break;
+		edit(1);
+	}
+	shutthor();
+	exit(0);
+}

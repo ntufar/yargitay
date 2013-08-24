@@ -1,0 +1,2284 @@
+#include <stdio.h>
+#include <string.h>
+#include "yf.h"
+#include "tools.h"
+#include "ceza.h"
+#define KAYIT_GIRILSIN_MI \
+	do{\
+		stat = yfquestion("Bu kayýt girilsin mi? (e/h)"); \
+	}while(stat != 'e' && stat != 'E' && stat !='H' && stat != 'h')
+
+EXEC SQL INCLUDE SQLCA;
+
+kayitgir(tekrarli, y1999)
+	int tekrarli;
+	int y1999;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+
+        char daireno[4];
+        char esassirayil[5];
+        long esassirano;
+        char geldigitarih[11];
+        char tebligtarih[11];
+	char tebligmasa[3];
+	long tebligno;
+        long esasno;
+        long kararno;
+	char gonderenmahkeme[32];
+	char sucunturu[32];
+	char temyizeden[51];
+	char tutuklu[32];
+
+	long essno;
+	long tblno;
+	long esno;
+	long karno;
+
+	short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+		ind10, ind11, ind12, ind13;
+
+	long enbuyukesas;
+	char tamyil[5];
+
+EXEC SQL END DECLARE SECTION;
+
+
+	char buf[10];
+	int stat;
+	int startfield=0;
+	int i;
+
+	showform(cgir);
+	/* masa */
+	for(i=0;daire[i];i++){
+		if(!isdigit(daire[i]))break;
+		buf[i]=daire[i];
+	}
+	buf[i]=0; 
+	strcpy(cgir->ifs[5].text,buf);
+kgyenikayit:
+	refreshtime();		
+	cgir->ifs[0].edit = 1;
+	cgir->ifs[1].edit = 1;
+	cgir->ifs[2].edit = 1;
+	cgir->ifs[3].edit = 1;
+	cgir->ifs[4].edit = 1;
+	cgir->ifs[5].edit = 1;
+	cgir->ifs[6].edit = 1;
+	cgir->ifs[7].edit = 1;
+	cgir->ifs[8].edit = 1;
+	cgir->ifs[9].edit = 1;
+	cgir->ifs[10].edit = 1;
+	cgir->ifs[11].edit = 1;
+	cgir->ifs[12].edit = 1;
+
+	if(y1999){
+                strcpy(yyil,"19");
+                strcpy(yil,"99");
+                strcpy(tamyil,"1999");
+                strcpy(tarih,"30/12/1999");
+	}
+
+	if(!tekrarli){
+		clearform(cgir);
+	}else{
+		cgir->ifs[4].edit = 0;
+		cgir->ifs[5].edit = 0;
+		cgir->ifs[9].edit = 0;
+		cgir->ifs[10].edit = 0;
+		clearform(cgir);
+		cgir->ifs[4].edit = 1;
+		cgir->ifs[5].edit = 1;
+		cgir->ifs[9].edit = 1;
+		cgir->ifs[10].edit = 1;
+	}
+
+	strcpy(cgir->ifs[0].text, daire);
+	dress(daire,3);
+	
+	strcpy(cgir->ifs[1].text,yyil);
+	strcat(cgir->ifs[1].text,yil);
+	dress(yil,2);
+
+	strcpy(cgir->ifs[3].text,tarih);
+	cgir->ifs[3].edit = 0;
+
+	/*yfmessage("Lütfen bekleyiniz...");*/
+	strcpy(tamyil,yyil);
+	strcat(tamyil,yil);
+	EXEC SQL SELECT MAX(esassirano) INTO :enbuyukesas:ind1 FROM gelendosya
+		WHERE daireno = :daire AND esassirayil = :tamyil;
+	if(sqlca.sqlcode < 0){
+		yfquestion(sqlca.sqlerrm.sqlerrmc);
+		return 0;
+	}
+	if(sqlca.sqlcode == 1403){
+		yfquestion(sqlca.sqlerrm.sqlerrmc);
+		return 0;
+	}
+	/*yfmessage(" ");*/
+	
+	if(ind1 == -1 || enbuyukesas == 0)enbuyukesas = 1;
+	else enbuyukesas++;
+	sprintf(buf,"%lu",enbuyukesas);
+	strcpy(cgir->ifs[2].text,buf);
+	cgir->ifs[2].edit=0;
+
+
+	cgir->ifs[0].edit = 0;
+	cgir->ifs[1].edit = 0;
+	cgir->ifs[2].edit = 0;
+	cgir->ifs[3].edit = 0;
+	cgir->ifs[4].edit = 1;
+	cgir->ifs[5].edit = 1;
+	cgir->ifs[6].edit = 1;
+	cgir->ifs[7].edit = 1;
+	cgir->ifs[8].edit = 1;
+	cgir->ifs[9].edit = 1;
+	cgir->ifs[10].edit = 1;
+	cgir->ifs[11].edit = 1;
+	cgir->ifs[12].edit = 1;
+
+	outputform(cgir);
+	if(!tekrarli)startfield = 0;
+kgyineden:
+	stat = superinputform(cgir, startfield);
+	if (stat == 0){
+		refreshtime();
+		return 1;
+	}
+
+	/* Insert new values */
+	strcpy(daireno,	cgir->ifs[0].text);
+	daireno[3]=0;
+
+	strcpy(esassirayil,	cgir->ifs[1].text);
+	esassirayil[4]=0;
+
+	esassirano = atol(cgir->ifs[2].text);
+
+	strcpy(geldigitarih,cgir->ifs[3].text);
+	geldigitarih[10]=0;
+
+	strcpy(tebligtarih,	cgir->ifs[4].text);
+	tebligtarih[10]=0;
+	if(tebligtarih[0]==0){
+		yfmessage("Teblið tarihi geçersiz");
+		startfield = 4;
+		goto kgyineden;
+	}
+
+	strcpy(tebligmasa,	cgir->ifs[5].text);
+	tebligmasa[2]=0;
+	if(tebligmasa[0]==0){
+		yfmessage("Teblið masasý geçersiz");
+		startfield = 5;
+		goto kgyineden;
+	}
+
+	tebligno = atol(cgir->ifs[6].text);
+	if(tebligno == 0){
+		yfmessage("Teblið numarasý geçersiz");
+		startfield = 6;
+		goto kgyineden;
+	}
+
+	esasno = atol(cgir->ifs[7].text);
+	if(esasno == 0){
+		yfmessage("Esas numarasý geçersiz");
+		startfield = 7;
+		goto kgyineden;
+	}
+
+	kararno = atol(cgir->ifs[8].text);
+	if(kararno == 0){
+		yfmessage("Karar numarasý geçersiz");
+		startfield = 8;
+		goto kgyineden;
+	}
+
+	strcpy(gonderenmahkeme,cgir->ifs[9].text);
+	gonderenmahkeme[31]=0;
+	if(gonderenmahkeme[0]==0){
+		yfmessage("Gönderen mahkeme geçersiz");
+		startfield = 9;
+		goto kgyineden;
+	}
+
+	strcpy(sucunturu,	cgir->ifs[10].text);
+	sucunturu[31]=0;
+	if(sucunturu[0]==0){
+		yfmessage("Suçun türü geçersiz");
+		startfield = 10;
+		goto kgyineden;
+	}
+
+	strcpy(temyizeden,	cgir->ifs[11].text);
+	temyizeden[50]=0;
+	if(temyizeden[0]==0){
+		yfmessage("Sanýk adý geçersiz");
+		startfield = 11;
+		goto kgyineden;
+	}
+
+	strcpy(tutuklu,	cgir->ifs[12].text);
+	tutuklu[31]=0;
+	/*if(tutuklu[0]==0){
+		yfmessage("Tutuklu bilgileri geçersiz");
+		startfield = 12;
+		goto kgyineden;
+	}*/
+	
+	KAYIT_GIRILSIN_MI;	
+        if (stat == 'e' || stat == 'E'){
+	
+		EXEC SQL INSERT INTO gelendosya 
+			(
+			DAIRENO, ESASSIRAYIL, ESASSIRANO,
+			GELDIGITARIH, TEBLIGTARIH,
+			TEBLIGMASA, TEBLIGNO, ESASNO,
+			KARARNO, GONDERENMAHKEME, 
+			SUCUNTURU, TEMYIZEDEN, TUTUKLU
+			)
+			VALUES(
+			:daireno, :esassirayil, :esassirano,
+			:geldigitarih, :tebligtarih, :tebligmasa,
+			:tebligno, :esasno, :kararno,
+			:gonderenmahkeme, :sucunturu, 
+			:temyizeden, :tutuklu);
+
+		if (SQL_ERROR){
+			ntlog2(LOG_CEZA,"kayitgir.SQL_INSERT",SQL_MESSAGE);
+			yfmessage(SQL_MESSAGE);
+			goto kgyineden;
+		}
+		{
+		char	x1[1024];
+		char	x2[1024];
+		char	x3[1024];
+		char	x4[1024];
+		char	x5[1024];
+		char	x6[1024];
+		char	x7[1024];
+		/*char	x8[1024];
+		char	x9[1024];
+		char	x10[1024];
+		char	x11[1024];
+		char	x12[1024];*/
+		strcpy(x1, quote(daireno));
+		strcpy(x2, quote(esassirayil));
+		strcpy(x3, quote(tebligmasa));
+		strcpy(x4, quote(gonderenmahkeme));
+		strcpy(x5, quote(sucunturu));
+		strcpy(x6, quote(temyizeden));
+		strcpy(x7, quote(tutuklu));
+		ntchanges("INSERT INTO gelendosya VALUES(\n"
+			"\t'%s',\t'%s',\t%lu,\n"
+			"\t'%s',\t'%s',\t'%s',\n"
+			"\t%lu,\t%lu,\t%lu,\n"
+			"\t'%s',\t'%s',\n"
+			"\t'%s',\t'%s');\n",
+			x1, x2, esassirano,
+			geldigitarih, tebligtarih, x3,
+			tebligno, esasno, kararno,
+			x4, x5, 
+			x6, x7);
+		}
+			/*daireno, esassirayil, esassirano,
+			geldigitarih, tebligtarih, tebligmasa,
+			tebligno, esasno, kararno,
+			gonderenmahkeme, sucunturu, 
+			temyizeden, tutuklu);*/
+		nthareket("ceza: dosya gir");
+
+		EXEC SQL COMMIT WORK ;
+		yfmessage("Kayýt kaydedildi");
+	} else yfmessage("Kayýt iptal edildi");
+	if(tekrarli)startfield=6;
+	goto kgyenikayit;
+}
+/**************************** Sorgu ************************/
+int kayitsor()
+{
+
+EXEC SQL BEGIN DECLARE SECTION;
+
+	/*------------- Kararsonucu ------------*/
+	char sdaireno[4];
+	char sesassirayil[5];
+	long sesassirano;
+	char skararsonucu[31];
+	char skarartarihi[11];
+	long skararnumarasi;
+	char sgonderilistarihi[11];
+	short sind1,sind2,sind3,sind4,sind5,sind6,sind7;
+	/*------------- Gelendosya ------------*/
+        char daireno[100];
+        char esassirayil[100];
+        char esassirano[100];
+        char geldigitarih[100];
+        char tebligtarih[100];
+	char tebligmasa[100];
+	char tebligno[100];
+        char esasno[100];
+        char kararno[100];
+	char gonderenmahkeme[100];
+	char sucunturu[100];
+	char temyizeden[100];
+	char tutuklu[100];
+	long p_kararsonucu;
+
+	long essno;
+	long tblno;
+	long esno;
+	long karno;
+
+	char buf[1000];
+	short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+		ind10, ind11, ind12, ind13, ind14;
+	SQL_CURSOR cur;
+
+EXEC SQL END DECLARE SECTION;
+
+	int i;
+	int waswhere = 0;
+	int returnvalue = 0;
+
+
+	nthareket("ceza: dosya sor");
+yenidensor:
+	clearform(csornson);
+	csornson->ifs[0].edit = 1;
+	csornson->ifs[1].edit = 1;
+	csornson->ifs[2].edit = 1;
+	csornson->ifs[3].edit = 1;
+	csornson->ifs[4].edit = 1;
+	csornson->ifs[5].edit = 1;
+	csornson->ifs[6].edit = 1;
+	csornson->ifs[7].edit = 1;
+	csornson->ifs[8].edit = 1;
+	csornson->ifs[9].edit = 1;
+	csornson->ifs[10].edit = 1;
+	csornson->ifs[11].edit = 1;
+	csornson->ifs[13].edit = 1;
+	csornson->ifs[14].edit = 1;
+	csornson->ifs[15].edit = 1;
+	csornson->ifs[16].edit = 1;
+	clearform(csornson);
+	csornson->ifs[13].edit = 0;
+	csornson->ifs[14].edit = 0;
+	csornson->ifs[15].edit = 0;
+	csornson->ifs[16].edit = 0;
+	showform(csornson);
+
+        strcpy(csornson->ifs[0].text, daire);
+	outputform(csornson);
+
+	i = inputform(csornson);
+	if(i == 0)return 0;
+	strcpy(daireno,		csornson->ifs[0].text);
+	strcpy(esassirayil,	csornson->ifs[1].text);
+	strcpy(esassirano,	csornson->ifs[2].text);
+	strcpy(geldigitarih,	csornson->ifs[3].text);
+	strcpy(tebligtarih,	csornson->ifs[4].text);
+	strcpy(tebligmasa,	csornson->ifs[5].text);
+	strcpy(tebligno,	csornson->ifs[6].text);
+	strcpy(esasno,		csornson->ifs[7].text);
+	strcpy(kararno,		csornson->ifs[8].text);
+	strcpy(gonderenmahkeme,	csornson->ifs[9].text);
+	strcpy(sucunturu,	csornson->ifs[10].text);
+	strcpy(temyizeden,	csornson->ifs[11].text);
+	strcpy(tutuklu,		csornson->ifs[12].text);
+	
+
+        strcpy(buf,"select "
+                "g.daireno, g.esassirayil, g.esassirano, g.geldigitarih,"
+                "g.tebligtarih, g.tebligmasa, g.tebligno, g.esasno,"
+                "g.kararno, g.gonderenmahkeme, g.sucunturu,"
+                "g.temyizeden, g.tutuklu, g.kararsonucu "
+	/*	"k.karsonucu, k.karartarihi, "
+		"k.kararnumarasi, k.gonderilistarihi "*/
+                "from gelendosya g "/*, kararsonucu k "
+		"where g.kararsonucu = k.id "*/
+	       ); 
+	/***********************/
+	if(strcmp(esassirayil,"19")==0||strcmp(esassirayil,"20")==0)esassirayil[0]=0;
+        if(daireno[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.daireno = '");
+                strcat(buf,quote(daireno));
+                strcat(buf,"'");
+        }
+        if(esassirayil[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.esassirayil = '");
+                strcat(buf,esassirayil);
+                strcat(buf,"'");
+        }
+        if(esassirano[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.esassirano =");
+                strcat(buf,esassirano);
+        }
+        if(geldigitarih[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.geldigitarih ='");
+                strcat(buf,quote(geldigitarih));
+                strcat(buf,"'");
+        }
+        if(tebligtarih[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.tebligtarih = '");
+                strcat(buf,quote(tebligtarih));
+                strcat(buf,"'");
+        }
+        if(tebligmasa[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.tebligmasa like '");
+                strcat(buf,quote(tebligmasa));
+                strcat(buf,"%'");
+        }
+        if(tebligno[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.tebligno =");
+                strcat(buf,tebligno);
+        }
+        if(esasno[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.esasno =");
+                strcat(buf,esasno);
+        }
+        if(kararno[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.kararno =");
+                strcat(buf,kararno);
+        }
+        if(gonderenmahkeme[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.gonderenmahkeme like '");
+                strcat(buf,quote(gonderenmahkeme));
+                strcat(buf,"%'");
+        }
+        if(sucunturu[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.sucunturu like '");
+                strcat(buf,quote(sucunturu));
+                strcat(buf,"%'");
+        }
+        if(temyizeden[0]!=0){
+		if(!waswhere){strcat(buf," where ");waswhere=1;}
+		else strcat(buf," and ");
+                strcat(buf," g.temyizeden like '");
+                strcat(buf,quote(temyizeden));
+                strcat(buf,"%'");
+        }
+        if(tutuklu[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," g.tutuklu like '");
+                strcat(buf,quote(tutuklu));
+                strcat(buf,"%'");
+        }
+
+
+	EXEC SQL PREPARE s1 FROM :buf;
+	if(SQL_ERROR || SQL_NOTFOUND){
+		yfquestion(SQL_MESSAGE);
+		goto sorsonkayit;
+	}
+	EXEC SQL declare cur cursor for s1;
+	EXEC SQL OPEN cur ;
+
+	while(1){
+	yfmessage("Lütfen bekleyiniz...");
+	EXEC SQL FETCH cur INTO
+		:daireno:ind1, :esassirayil:ind2, :essno:ind3,
+		:geldigitarih:ind4, :tebligtarih:ind5, :tebligmasa:ind6,
+		:tblno:ind7, :esno:ind8, :karno:ind9,
+		:gonderenmahkeme:ind10, :sucunturu:ind11,
+		:temyizeden:ind12, :tutuklu:ind13,
+		:p_kararsonucu:ind14
+	;
+
+	if (SQL_NOTFOUND) goto sorsonkayit;
+	if (SQL_ERROR) goto sorsonkayit;
+	goto sornoerror;
+sorsorerror:
+	yfquestion(SQL_MESSAGE);
+	goto yenidensor;
+sorsonkayit:
+	EXEC SQL CLOSE cur;
+	yfquestion("Son kayýt. Devam için bir tuþa basýnýz");
+	returnvalue = 1;
+	break;
+sornoerror:
+	clearform(csornson);
+
+	if(ind1 >= 0) strncpy(csornson->ifs[0].text,daireno,90);
+	else csornson->ifs[0].text[0]=0;
+	if(ind2 >= 0) strncpy(csornson->ifs[1].text,esassirayil,90);
+	else csornson->ifs[1].text[0]=0;
+	if(ind3 >= 0) sprintf(csornson->ifs[2].text,"%lu",essno);
+	else csornson->ifs[2].text[0]=0;
+	if(ind4 >= 0) strncpy(csornson->ifs[3].text,geldigitarih,90);
+	else csornson->ifs[3].text[0]=0;
+	if(ind5 >= 0) strncpy(csornson->ifs[4].text,tebligtarih,90);
+	else csornson->ifs[4].text[0]=0;
+	if(ind6 >= 0) strncpy(csornson->ifs[5].text,tebligmasa,90);
+	else csornson->ifs[5].text[0]=0;
+	if(ind7 >= 0) sprintf(csornson->ifs[6].text,"%lu",tblno);
+	else csornson->ifs[6].text[0]=0;
+	if(ind8 >= 0) sprintf(csornson->ifs[7].text,"%lu",esno);
+	else csornson->ifs[7].text[0]=0;
+	if(ind9 >= 0) sprintf(csornson->ifs[8].text,"%lu",karno);
+	else csornson->ifs[8].text[0]=0;
+	if(ind10 >= 0) strncpy(csornson->ifs[9].text,gonderenmahkeme,90);
+	else csornson->ifs[9].text[0]=0;
+	if(ind11 >= 0) strncpy(csornson->ifs[10].text,sucunturu,90);
+	else csornson->ifs[10].text[0]=0;
+	if(ind12 >= 0) strncpy(csornson->ifs[11].text,temyizeden,90);
+	else csornson->ifs[11].text[0]=0;
+	if(ind13 >= 0) strncpy(csornson->ifs[12].text,tutuklu,90);
+	else csornson->ifs[12].text[0]=0;
+	/* simdi sonuc var mi bakalim... */
+	EXEC SQL SELECT 
+		kararsonucu.karsonucu, 
+		kararsonucu.karartarihi, 
+		kararsonucu.kararnumarasi, 
+		kararsonucu.gonderilistarihi
+	INTO 	
+		:skararsonucu:sind4,
+		:skarartarihi:sind5, :skararnumarasi:sind6,
+		:sgonderilistarihi:sind7
+
+	FROM kararsonucu
+	WHERE
+		kararsonucu.id = :p_kararsonucu
+	/*	
+		kararsonucu.daireno = :daireno AND 
+		kararsonucu.esassirayil = :esassirayil AND
+		kararsonucu.esassirano = :essno	
+
+	*/
+	;
+	/***************************************************/
+
+	csornson->ifs[13].text[0]=0;
+	csornson->ifs[14].text[0]=0;
+	csornson->ifs[15].text[0]=0;
+	csornson->ifs[16].text[0]=0;
+
+	if (p_kararsonucu == 0){
+		strcpy(csornson->ifs[13].text,"Bu dosya sonuca baðlanmamýþtýr");
+	}else{
+	if(sind4 >= 0) strncpy(csornson->ifs[13].text,skararsonucu,90);
+	else csornson->ifs[13].text[0]=0;
+	if(sind5 >= 0) strncpy(csornson->ifs[14].text,skarartarihi,90);
+	else csornson->ifs[14].text[0]=0;
+	if(sind6 >= 0) sprintf(csornson->ifs[15].text,"%lu",skararnumarasi,90);
+	else csornson->ifs[15].text[0]=0;
+	if(sind7 >= 0) strncpy(csornson->ifs[16].text,sgonderilistarihi,90);
+	else csornson->ifs[16].text[0]=0;
+	}
+
+	outputform(csornson);
+	i = yfquestion("Sonraki kaydý görmek için herhangi bir tuþa basýnýz."
+			" Çýkmak için x basýnýz");
+	if(i == 'x' || i == 'X') break;
+	}
+	return returnvalue;
+
+}
+/**************************** Kayit Duzeltme ************************/
+kayitduzelt()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+
+        long id;
+        char daireno[4];
+        char esassirayil[5];
+        long esassirano;
+        char geldigitarih[11];
+        char tebligtarih[11];
+	char tebligmasa[3];
+	long tebligno;
+        long esasno;
+        long kararno;
+	char gonderenmahkeme[32];
+	char sucunturu[32];
+	char temyizeden[51];
+	char tutuklu[32];
+
+	long essno;
+	long tblno;
+	long esno;
+	long karno;
+
+	short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+		ind10, ind11, ind12, ind13, ind14;
+
+EXEC SQL END DECLARE SECTION;
+
+
+	char buf[10];
+	int stat;
+	int startfield;
+
+	showform(cgir);
+kdyenikayit:
+	cgir->ifs[0].edit = 1;
+	cgir->ifs[1].edit = 1;
+	cgir->ifs[2].edit = 1;
+	cgir->ifs[3].edit = 1;
+	cgir->ifs[4].edit = 1;
+	cgir->ifs[5].edit = 1;
+	cgir->ifs[6].edit = 1;
+	cgir->ifs[7].edit = 1;
+	cgir->ifs[8].edit = 1;
+	cgir->ifs[9].edit = 1;
+	cgir->ifs[10].edit = 1;
+	cgir->ifs[11].edit = 1;
+	cgir->ifs[12].edit = 1;
+	clearform(cgir);
+
+	strcpy(cgir->ifs[0].text, daire);
+	cgir->ifs[0].edit = 0;
+	cgir->ifs[1].edit = 1;
+	cgir->ifs[2].edit = 1;
+	cgir->ifs[3].edit = 0;
+	cgir->ifs[4].edit = 0;
+	cgir->ifs[5].edit = 0;
+	cgir->ifs[6].edit = 0;
+	cgir->ifs[7].edit = 0;
+	cgir->ifs[8].edit = 0;
+	cgir->ifs[9].edit = 0;
+	cgir->ifs[10].edit = 0;
+	cgir->ifs[11].edit = 0;
+	cgir->ifs[12].edit = 0;
+
+
+	outputform(cgir);
+kdy:
+	stat = inputform(cgir);
+	if(stat == 0){
+		return 1;
+	}
+	if(cgir->ifs[0].text[0]==0 ||
+	   cgir->ifs[1].text[0]==0 ||
+	   cgir->ifs[2].text[0]==0){
+		yfmessage("2 alaný doldurunuz");
+		goto kdy;
+	}
+
+	strcpy(daireno, cgir->ifs[0].text);
+	dress(daireno,3);
+	strcpy(esassirayil,     cgir->ifs[1].text);
+	/*dress(esassirayil,4);*/
+	esassirano = atol(cgir->ifs[2].text);
+
+
+	yfmessage("Lütfen bekleyiniz...");
+        EXEC SQL DECLARE gd_cur CURSOR FOR SELECT
+                id, daireno, esassirayil, esassirano, geldigitarih,
+                tebligtarih, tebligmasa, tebligno, esasno,
+                kararno, gonderenmahkeme, sucunturu,
+                temyizeden, tutuklu 
+		FROM gelendosya
+		WHERE
+		daireno = :daireno and esassirayil = :esassirayil and
+		esassirano = :esassirano
+		FOR UPDATE
+	;
+	EXEC SQL OPEN gd_cur;
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"kayit_duzelt.duzeltecek_dosya_arama",SQL_MESSAGE);
+		yfquestion(SQL_MESSAGE);
+		goto kdy;
+	}
+	if (SQL_NOTFOUND){
+	        yfmessage("Öyle bir dosya bulunmadý");
+		goto kdy;
+	}
+	EXEC SQL FETCH gd_cur INTO 
+		:id:ind14,
+                :daireno:ind1, :esassirayil:ind2, :essno:ind3,
+                :geldigitarih:ind4, :tebligtarih:ind5, :tebligmasa:ind6,
+                :tblno:ind7, :esno:ind8, :karno:ind9,
+                :gonderenmahkeme:ind10, :sucunturu:ind11,
+                :temyizeden:ind12, :tutuklu:ind13;
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"kayit_duzelt.duzeltecek_dosya_arama",SQL_MESSAGE);
+		yfquestion(SQL_MESSAGE);
+		goto kdy;
+	}
+	if (SQL_NOTFOUND){
+	        yfmessage("Öyle bir dosya bulunmadý");
+		goto kdy;
+	}
+	yfmessage(" ");
+	/*-------------------------------------/
+	cgir->ifs[0].edit = 0;
+	cgir->ifs[1].edit = 1;
+	cgir->ifs[2].edit = 0;
+	cgir->ifs[3].edit = 1;
+	cgir->ifs[4].edit = 1;
+	cgir->ifs[5].edit = 1;
+	cgir->ifs[6].edit = 1;
+	cgir->ifs[7].edit = 1;
+	cgir->ifs[8].edit = 1;
+	cgir->ifs[9].edit = 1;
+	cgir->ifs[10].edit = 1;
+	cgir->ifs[11].edit = 1;
+	cgir->ifs[12].edit = 1;
+
+	if(ind1 >= 0) strncpy(cgir->ifs[0].text,daireno,90);
+	else cgir->ifs[0].text[0]=0;
+	if(ind2 >= 0) strncpy(cgir->ifs[1].text,esassirayil,90);
+	else cgir->ifs[1].text[0]=0;
+	if(ind3 >= 0) sprintf(cgir->ifs[2].text,"%lu",essno);
+	else cgir->ifs[2].text[0]=0;
+	if(ind4 >= 0) strncpy(cgir->ifs[3].text,geldigitarih,90);
+	else cgir->ifs[3].text[0]=0;
+	if(ind5 >= 0) strncpy(cgir->ifs[4].text,tebligtarih,90);
+	else cgir->ifs[4].text[0]=0;
+	if(ind6 >= 0) strncpy(cgir->ifs[5].text,tebligmasa,90);
+	else cgir->ifs[5].text[0]=0;
+	if(ind7 >= 0) sprintf(cgir->ifs[6].text,"%lu",tblno);
+	else cgir->ifs[6].text[0]=0;
+	if(ind8 >= 0) sprintf(cgir->ifs[7].text,"%lu",esno);
+	else cgir->ifs[7].text[0]=0;
+	if(ind9 >= 0) sprintf(cgir->ifs[8].text,"%lu",karno);
+	else cgir->ifs[8].text[0]=0;
+	if(ind10 >= 0) strncpy(cgir->ifs[9].text,gonderenmahkeme,90);
+	else cgir->ifs[9].text[0]=0;
+	if(ind11 >= 0) strncpy(cgir->ifs[10].text,sucunturu,90);
+	else cgir->ifs[10].text[0]=0;
+	if(ind12 >= 0) strncpy(cgir->ifs[11].text,temyizeden,90);
+	else cgir->ifs[11].text[0]=0;
+	if(ind13 >= 0) strncpy(cgir->ifs[12].text,tutuklu,90);
+	else cgir->ifs[12].text[0]=0;
+	/*-------------------------------------*/
+	
+/***************************aaaaaaaaaaaaaaaaaaaaaaaaaaaaa*/
+	cgir->ifs[0].edit = 0;
+	cgir->ifs[1].edit = 0;
+	cgir->ifs[2].edit = 0;
+	cgir->ifs[3].edit = 1;
+	cgir->ifs[4].edit = 1;
+	cgir->ifs[5].edit = 1;
+	cgir->ifs[6].edit = 1;
+	cgir->ifs[7].edit = 1;
+	cgir->ifs[8].edit = 1;
+	cgir->ifs[9].edit = 1;
+	cgir->ifs[10].edit = 1;
+	cgir->ifs[11].edit = 1;
+	cgir->ifs[12].edit = 1;
+	if(ind1 >= 0) strncpy(cgir->ifs[0].text,daireno,90);
+	else cgir->ifs[0].text[0]=0;
+	if(ind2 >= 0) strncpy(cgir->ifs[1].text,esassirayil,90);
+	else cgir->ifs[1].text[0]=0;
+	if(ind3 >= 0) sprintf(cgir->ifs[2].text,"%lu",essno);
+	else cgir->ifs[2].text[0]=0;
+	if(ind4 >= 0) strncpy(cgir->ifs[3].text,geldigitarih,90);
+	else cgir->ifs[3].text[0]=0;
+	if(ind5 >= 0) strncpy(cgir->ifs[4].text,tebligtarih,90);
+	else cgir->ifs[4].text[0]=0;
+	if(ind6 >= 0) strncpy(cgir->ifs[5].text,tebligmasa,90);
+	else cgir->ifs[5].text[0]=0;
+	if(ind7 >= 0) sprintf(cgir->ifs[6].text,"%lu",tblno);
+	else cgir->ifs[6].text[0]=0;
+	if(ind8 >= 0) sprintf(cgir->ifs[7].text,"%lu",esno);
+	else cgir->ifs[7].text[0]=0;
+	if(ind9 >= 0) sprintf(cgir->ifs[8].text,"%lu",karno);
+	else cgir->ifs[8].text[0]=0;
+	if(ind10 >= 0) strncpy(cgir->ifs[9].text,gonderenmahkeme,90);
+	else cgir->ifs[9].text[0]=0;
+	if(ind11 >= 0) strncpy(cgir->ifs[10].text,sucunturu,90);
+	else cgir->ifs[10].text[0]=0;
+	if(ind12 >= 0) strncpy(cgir->ifs[11].text,temyizeden,90);
+	else cgir->ifs[11].text[0]=0;
+	if(ind13 >= 0) strncpy(cgir->ifs[12].text,tutuklu,90);
+	else cgir->ifs[12].text[0]=0;
+/***************************aaaaaaaaaaaaaaaaaaaaaaaaaaaaa*/
+	outputform(cgir);
+	startfield = 0;
+kdyenidendene:
+	stat = superinputform(cgir, startfield);
+	if (stat == 0){
+		EXEC SQL ROLLBACK;
+		return 1;
+	}
+
+	/* Insert new values */
+
+/*********************************************************************/
+	strcpy(daireno,	cgir->ifs[0].text);
+	daireno[3]=0;
+	dress(daireno,3);
+
+	strcpy(esassirayil,	cgir->ifs[1].text);
+	esassirayil[4]=0;
+
+	esassirano = atol(cgir->ifs[2].text);
+
+	strcpy(geldigitarih,cgir->ifs[3].text);
+	geldigitarih[10]=0;
+
+	strcpy(tebligtarih,	cgir->ifs[4].text);
+	tebligtarih[10]=0;
+	if(tebligtarih[0]==0){
+		yfmessage("Teblið tarihi geçersiz");
+		startfield = 4;
+		goto kdyenidendene;
+	}
+
+	strcpy(tebligmasa,	cgir->ifs[5].text);
+	tebligmasa[2]=0;
+	if(tebligmasa[0]==0){
+		yfmessage("Teblið masasý geçersiz");
+		startfield = 5;
+		goto kdyenidendene;
+	}
+
+	tebligno = atol(cgir->ifs[6].text);
+	if(tebligno == 0){
+		yfmessage("Teblið numarasý geçersiz");
+		startfield = 6;
+		goto kdyenidendene;
+	}
+
+	esasno = atol(cgir->ifs[7].text);
+	if(esasno == 0){
+		yfmessage("Esas numarasý geçersiz");
+		startfield = 7;
+		goto kdyenidendene;
+	}
+
+	kararno = atol(cgir->ifs[8].text);
+	if(kararno == 0){
+		yfmessage("Karar numarasý geçersiz");
+		startfield = 8;
+		goto kdyenidendene;
+	}
+
+	strcpy(gonderenmahkeme,cgir->ifs[9].text);
+	gonderenmahkeme[31]=0;
+	if(gonderenmahkeme[0]==0){
+		yfmessage("Gönderen mahkeme geçersiz");
+		startfield = 9;
+		goto kdyenidendene;
+	}
+
+	strcpy(sucunturu,	cgir->ifs[10].text);
+	sucunturu[31]=0;
+	if(sucunturu[0]==0){
+		yfmessage("Suçun türü geçersiz");
+		startfield = 10;
+		goto kdyenidendene;
+	}
+
+	strcpy(temyizeden,	cgir->ifs[11].text);
+	temyizeden[50]=0;
+	if(temyizeden[0]==0){
+		yfmessage("Sanýk adý geçersiz");
+		startfield = 11;
+		goto kdyenidendene;
+	}
+
+	strcpy(tutuklu,	cgir->ifs[12].text);
+	tutuklu[31]=0;
+	/*if(tutuklu[0]==0){
+		yfmessage("Turuklu bilgileri geçersiz");
+		startfield = 12;
+		goto kdyenidendene;
+	}*/
+	
+/*********************************************************************/
+	KAYIT_GIRILSIN_MI;	
+        if (stat == 'e' || stat == 'E'){
+	
+	
+	
+	yfmessage("Lütfen bekleyiniz...");
+	EXEC SQL UPDATE gelendosya SET
+		geldigitarih 	= :geldigitarih, 
+		tebligtarih 	= :tebligtarih, 
+		tebligmasa 	= :tebligmasa,
+		tebligno 	= :tebligno, 
+		esasno 		= :esasno, 
+		kararno 	= :kararno,
+		gonderenmahkeme	= :gonderenmahkeme, 
+		sucunturu	= :sucunturu, 
+		temyizeden	= :temyizeden, 
+		tutuklu		= :tutuklu
+	WHERE 
+		CURRENT OF gd_cur
+	/*	daireno 	= :daireno AND
+		esassirayil	= :esassirayil AND
+		esassirano	= :esassirano*/
+	;
+		
+
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"kayit_gir.SQL_update",SQL_MESSAGE);
+		yfmessage(SQL_MESSAGE);
+		goto kdyenidendene;
+	}
+		{
+		char	x1[1024];
+		char	x2[1024];
+		char	x3[1024];
+		char	x4[1024];
+		char	x5[1024];
+		/*char	x6[1024];
+		char	x7[1024];
+		char	x8[1024];
+		char	x9[1024];
+		char	x10[1024];
+		char	x11[1024];
+		char	x12[1024];*/
+		strcpy(x1, quote(tebligmasa));
+		strcpy(x2, quote(gonderenmahkeme));
+		strcpy(x3, quote(sucunturu));
+		strcpy(x4, quote(temyizeden));
+		strcpy(x5, quote(tutuklu));
+	ntchanges("UPDATE gelendosya SET\n"
+		"\tgeldigitarih	= '%s', \n"
+		"\ttebligtarih 	= '%s', \n"
+		"\ttebligmasa 	= '%s',\n"
+		"\ttebligno 	= %lu, \n"
+		"\tesasno	= %lu, \n"
+		"\tkararno 	= %lu, \n"
+		"\tgonderenmahkeme	= '%s', \n"
+		"\tsucunturu	= '%s', \n"
+		"\ttemyizeden	= '%s', \n"
+		"\ttutuklu	= '%s'\n"
+		"WHERE\n"
+		"\tdaireno 	= '%s' AND\n"
+		"\tesassirayil	= '%s' AND\n"
+		"\tesassirano	= %lu;\n",
+		geldigitarih, 
+		tebligtarih, 
+		x1,
+		tebligno, 
+		esasno, 
+		kararno,
+		x2, 
+		x3, 
+		x4, 
+		x5,	
+			/*WHERE */
+		daireno,
+		esassirayil,
+		esassirano
+	);
+	}
+		/*geldigitarih, 
+		tebligtarih, 
+		tebligmasa,
+		tebligno, 
+		esasno, 
+		kararno,
+		gonderenmahkeme, 
+		sucunturu, 
+		temyizeden, 
+		tutuklu,	
+			WHERE 
+		daireno,
+		esassirayil,
+		esassirano
+	);*/
+	nthareket("ceza: dosya duzelt");
+	
+
+	yfmessage("Kayýt kaydedildi");
+	EXEC SQL CLOSE gd_cur;
+	EXEC SQL COMMIT WORK ;
+	} else {
+		EXEC SQL CLOSE gd_cur;
+		EXEC SQL ROLLBACK;
+		yfmessage("Kayýt iptal edildi");
+	}
+	goto kdyenikayit;
+}
+/**************************** Sonuc Girme ************************/
+sonucgir()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+
+	/*------------- Kararsonucu ------------*/
+	long sid;
+	char sdaireno[4];
+	char sesassirayil[5];
+	long sesassirano;
+	char skararsonucu[31];
+	char skarartarihi[11];
+	long skararnumarasi;
+	char sgonderilistarihi[11];
+	short sind1,sind2,sind3,sind4,sind5,sind6,sind7,sind8;
+	/*------------- Gelendosya ------------*/
+	long id;
+        char daireno[4];
+        char esassirayil[5];
+        long esassirano;
+        char geldigitarih[11];
+        char tebligtarih[11];
+	char tebligmasa[3];
+	long tebligno;
+        long esasno;
+        long kararno;
+	char gonderenmahkeme[32];
+	char sucunturu[32];
+	char temyizeden[51];
+	char tutuklu[32];
+
+	long essno;
+	long tblno;
+	long esno;
+	long karno;
+
+	long mid;
+
+	short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+		ind10, ind11, ind12, ind13, ind14;
+
+EXEC SQL END DECLARE SECTION;
+
+
+	char buf[10];
+	int stat;
+	int startfield;
+
+	showform(sgir);
+	/* butun alanlari sil. sadece fonksyona ilk girdiginde
+	   yapilacak
+	*/
+	sgir->ifs[0].edit = 1;
+	sgir->ifs[1].edit = 1;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 1;
+	sgir->ifs[4].edit = 1;
+	sgir->ifs[5].edit = 1;
+	sgir->ifs[6].edit = 1;
+	sgir->ifs[7].edit = 1;
+	sgir->ifs[8].edit = 1;
+	sgir->ifs[9].edit = 1;
+	sgir->ifs[10].edit = 1;
+	sgir->ifs[11].edit = 1;
+	sgir->ifs[12].edit = 1;
+	sgir->ifs[13].edit = 1;
+	sgir->ifs[14].edit = 1;
+	sgir->ifs[15].edit = 1;
+	sgir->ifs[16].edit = 1;
+	clearform(sgir);
+sgyenikayit:
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 0;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 1;
+	sgir->ifs[4].edit = 1;
+	sgir->ifs[5].edit = 1;
+	sgir->ifs[6].edit = 0;
+	sgir->ifs[7].edit = 1;
+	sgir->ifs[8].edit = 1;
+	sgir->ifs[9].edit = 1;
+	sgir->ifs[10].edit = 1;
+	sgir->ifs[11].edit = 1;
+	sgir->ifs[12].edit = 1;
+	sgir->ifs[13].edit = 1;
+	sgir->ifs[14].edit = 1;
+	sgir->ifs[15].edit = 1;
+	sgir->ifs[16].edit = 1;
+	clearform(sgir);
+	strcpy(sgir->ifs[0].text, daire);
+	sgir->ifs[0].edit = 0;
+	
+
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 1;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 0;
+	sgir->ifs[4].edit = 0;
+	sgir->ifs[5].edit = 0;
+	sgir->ifs[6].edit = 0;
+	sgir->ifs[7].edit = 0;
+	sgir->ifs[8].edit = 0;
+	sgir->ifs[9].edit = 0;
+	sgir->ifs[10].edit = 0;
+	sgir->ifs[11].edit = 0;
+	sgir->ifs[12].edit = 0;
+	sgir->ifs[13].edit = 0;
+	sgir->ifs[14].edit = 0;
+	sgir->ifs[15].edit = 0;
+	sgir->ifs[16].edit = 0;
+
+
+	outputform(sgir);
+	startfield = 0;
+sgyineden:
+	stat = superinputform(sgir, startfield);
+	if (stat == 0)return 1;
+	/*---------------------*/
+	strcpy(sdaireno, sgir->ifs[0].text);
+	dress(sdaireno,3);
+	/*sdaireno[3]=0;*/
+	dress(sdaireno,3);
+
+	strcpy(sesassirayil, sgir->ifs[1].text);
+	sesassirayil[4]=0;
+	if(sesassirayil[0]==0){
+		yfmessage("Geçersiz esas sýra yýl");
+		startfield = 1;
+		goto sgyineden;
+	}
+
+	sesassirano=atol(sgir->ifs[2].text);
+	if(sesassirano == 0){
+		yfmessage("Geçersiz esas sýra numarasý");
+		startfield = 2;
+		goto sgyineden;
+	}
+	EXEC SQL SELECT id
+	INTO :sid
+	FROM kararsonucu
+	WHERE
+		daireno = :sdaireno AND esassirayil = :sesassirayil AND
+		esassirano = :sesassirano;
+	if (!(SQL_NOTFOUND)){
+		yfmessage("Bu sonuç zaten girilmiþ");
+		goto sgyineden;
+	}
+	/*------------- Get data from gelendosya --------------*/
+	yfmessage("Lütfen bekleyiniz...");
+        EXEC SQL DECLARE sg_gd_cur CURSOR FOR SELECT
+                daireno, esassirayil, esassirano, geldigitarih,
+                tebligtarih, tebligmasa, tebligno, esasno,
+                kararno, gonderenmahkeme, sucunturu,
+                temyizeden, tutuklu 
+		FROM gelendosya
+		WHERE
+		daireno = :sdaireno and esassirayil = :sesassirayil and
+		esassirano = :sesassirano
+		FOR UPDATE
+	;
+	EXEC SQL OPEN sg_gd_cur;
+	EXEC SQL FETCH sg_gd_cur
+		INTO
+                :daireno:ind1, :esassirayil:ind2, :essno:ind3,
+                :geldigitarih:ind4, :tebligtarih:ind5, :tebligmasa:ind6,
+                :tblno:ind7, :esno:ind8, :karno:ind9,
+                :gonderenmahkeme:ind10, :sucunturu:ind11,
+                :temyizeden:ind12, :tutuklu:ind13
+	;
+	yfmessage(" ");
+	if (SQL_NOTFOUND){
+	        yfmessage("Öyle bir dosya bulunmadý");
+		goto sgyineden;
+	}
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 0;
+	sgir->ifs[2].edit = 0;
+	sgir->ifs[3].edit = 1;
+	sgir->ifs[4].edit = 1;
+	sgir->ifs[5].edit = 1;
+	sgir->ifs[6].edit = 1;
+	sgir->ifs[7].edit = 0;
+	sgir->ifs[8].edit = 0;
+	sgir->ifs[9].edit = 0;
+	sgir->ifs[10].edit = 0;
+	sgir->ifs[11].edit = 0;
+	sgir->ifs[12].edit = 0;
+	sgir->ifs[13].edit = 0;
+	sgir->ifs[14].edit = 0;
+	sgir->ifs[15].edit = 0;
+	sgir->ifs[16].edit = 0;
+
+	if(ind4 >= 0) strncpy(sgir->ifs[7].text,geldigitarih,90);
+	else sgir->ifs[7].text[0]=0;
+	if(ind5 >= 0) strncpy(sgir->ifs[8].text,tebligtarih,90);
+	else sgir->ifs[8].text[0]=0;
+	if(ind6 >= 0) strncpy(sgir->ifs[9].text,tebligmasa,90);
+	else sgir->ifs[9].text[0]=0;
+	if(ind7 >= 0) sprintf(sgir->ifs[10].text,"%lu",tblno);
+	else sgir->ifs[10].text[0]=0;
+	if(ind8 >= 0) sprintf(sgir->ifs[11].text,"%lu",esno);
+	else sgir->ifs[11].text[0]=0;
+	if(ind9 >= 0) sprintf(sgir->ifs[12].text,"%lu",karno);
+	else sgir->ifs[12].text[0]=0;
+	if(ind10 >= 0) strncpy(sgir->ifs[13].text,gonderenmahkeme,90);
+	else sgir->ifs[13].text[12]=0;
+	if(ind11 >= 0) strncpy(sgir->ifs[14].text,sucunturu,90);
+	else sgir->ifs[14].text[0]=0;
+	if(ind12 >= 0) strncpy(sgir->ifs[15].text,temyizeden,90);
+	else sgir->ifs[15].text[0]=0;
+	if(ind13 >= 0) strncpy(sgir->ifs[16].text,tutuklu,90);
+	else sgir->ifs[16].text[0]=0;
+	/*-------------------------------------*/
+	outputform(sgir);
+	startfield = 0;
+sgyine2:
+	stat = superinputform(sgir, startfield);
+	if(stat == 0){
+		EXEC SQL ROLLBACK;
+		return 0;
+	}
+	/*-----------------------------------------------------*/
+	/* Insert new values */
+	strcpy(sdaireno,	sgir->ifs[0].text);
+	sdaireno[3]=0;
+
+	strcpy(sesassirayil,	sgir->ifs[1].text);
+	sesassirayil[4]=0;
+
+	sesassirano = atol(sgir->ifs[2].text);
+
+        strcpy(skararsonucu,    sgir->ifs[3].text);
+        skararsonucu[30]=0;
+	if(skararsonucu[0]==0){
+		yfmessage("Geçersiz karar");
+		startfield = 3;
+		goto sgyine2;
+	}
+
+	strcpy(skarartarihi,sgir->ifs[4].text);
+	skarartarihi[10]=0;
+	if(skarartarihi[0]==0){
+		yfmessage("Geçersiz karar tarihi");
+		startfield = 4;
+		goto sgyine2;
+	}
+
+	skararnumarasi = atol(sgir->ifs[5].text);
+	if(skararnumarasi == 0){
+		yfmessage("Geçersiz karar numarasý");
+		startfield = 5;
+		goto sgyine2;
+	}
+
+	strcpy(sgonderilistarihi,	sgir->ifs[6].text);
+	sgonderilistarihi[10]=0;
+	if(sgonderilistarihi[0] == 0){
+		yfmessage("Geçersiz gönderiliþ tarihi");
+		startfield = 6;
+		goto sgyine2;
+	}
+
+	
+	KAYIT_GIRILSIN_MI;	
+        if (stat == 'e' || stat == 'E'){
+	EXEC SQL INSERT INTO kararsonucu 
+		(
+		DAIRENO, ESASSIRAYIL, ESASSIRANO,
+		KARSONUCU, KARARTARIHI, KARARNUMARASI,
+		GONDERILISTARIHI
+		)
+		VALUES(
+		:sdaireno, :sesassirayil, :sesassirano,
+		:skararsonucu,
+		:skarartarihi, :skararnumarasi,
+		:sgonderilistarihi);
+
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"sonuc_gir.SQL_INSERT",SQL_MESSAGE);
+		yfmessage(SQL_MESSAGE);
+		goto sgyine2;
+	}
+	if (SQL_NOTFOUND){
+		yfmessage(SQL_MESSAGE);
+		goto sgyine2;
+	}
+		{
+		char	x1[1024];
+		char	x2[1024];
+		char	x3[1024];
+		/*char	x4[1024];
+		char	x5[1024];
+		char	x6[1024];
+		char	x7[1024];
+		char	x8[1024];
+		char	x9[1024];
+		char	x10[1024];
+		char	x11[1024];
+		char	x12[1024];*/
+		strcpy(x1, quote(sdaireno));
+		strcpy(x2, quote(sesassirayil));
+		strcpy(x3, quote(skararsonucu));
+	ntchanges("INSERT INTO kararsonucu VALUES(\n"
+		"\t'%s',\t'%s',\t%lu,\n"
+		"\t'%s',\n"
+		"\t'%s',\t%lu,\n"
+		"\t'%s');\n",
+		x1, x2, sesassirano,
+		x3,
+		skarartarihi, skararnumarasi,
+		sgonderilistarihi
+	);
+	}
+		/*sdaireno, sesassirayil, sesassirano,
+		skararsonucu,
+		skarartarihi, skararnumarasi,
+		sgonderilistarihi
+	);*/
+/**************************************************************************
+**************************************************************************
+**************************************************************************
+**************************************************************************
+**************************************************************************/
+	dress(sdaireno,3);
+/*
+	EXEC SQL SELECT id INTO :mid FROM kararsonucu WHERE
+		daireno = :sdaireno AND
+		esassirayil = :sesassirayil AND
+		esassirano = :sesassirano
+	;
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"sonuc_gir.SQL_SELECT_FOR_FK",SQL_MESSAGE);
+		yfmessage(SQL_MESSAGE);
+		goto sgyine2;
+	}
+	if (SQL_NOTFOUND){
+	        yfmessage("Öyle bir sonuc bulunmadý");
+		goto sgyineden;
+	}
+*/
+
+
+	EXEC SQL UPDATE gelendosya SET kararsonucu=(SELECT id FROM kararsonucu WHERE
+			 	daireno = :sdaireno AND
+                		esassirayil = :sesassirayil AND
+                		esassirano = :sesassirano
+			)
+		WHERE
+		CURRENT OF sg_gd_cur
+	;
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"sonuc_gir.SQL_INSERT_FOR_FK",SQL_MESSAGE);
+		yfmessage(SQL_MESSAGE);
+		goto sgyine2;
+	}
+	if (SQL_NOTFOUND){
+	        yfmessage("Öyle bir dosya bulunmadý");
+		goto sgyineden;
+	}
+
+/**************************************************************************
+**************************************************************************
+**************************************************************************
+**************************************************************************
+**************************************************************************/
+	nthareket("ceza: sonuc gir");
+	yfmessage("Kayýt kaydedildi");
+	EXEC SQL CLOSE sg_gd_cur;
+	EXEC SQL COMMIT WORK ;
+	} else {
+		EXEC SQL CLOSE sg_gd_cur;
+		EXEC SQL ROLLBACK;
+		yfmessage("Kayýt iptal edildi");
+	}
+	goto sgyenikayit;
+}
+/**************************** Sonuc Sorgulama ************************/
+sonucsor()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+
+	/*------------- Kararsonucu ------------*/
+	char sdaireno[4];
+	char sesassirayil[5];
+	long sesassirano;
+	char skararsonucu[31];
+	char skarartarihi[11];
+	long skararnumarasi;
+	char sgonderilistarihi[11];
+	short sind1,sind2,sind3,sind4,sind5,sind6,sind7;
+	/*------------- Gelendosya ------------*/
+        char daireno[4];
+        char esassirayil[5];
+        long esassirano;
+        char geldigitarih[11];
+        char tebligtarih[11];
+	char tebligmasa[3];
+	long tebligno;
+        long esasno;
+        long kararno;
+	char gonderenmahkeme[32];
+	char sucunturu[32];
+	char temyizeden[51];
+	char tutuklu[32];
+
+	long essno;
+	long tblno;
+	long esno;
+	long karno;
+
+	short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+		ind10, ind11, ind12, ind13;
+
+EXEC SQL END DECLARE SECTION;
+
+
+	char buf[10];
+	int stat;
+
+	showform(sgir);
+	/* butun alanlari sil. sadece fonksyona ilk girdiginde
+	   yapilacak
+	*/
+	sgir->ifs[0].edit = 1;
+	sgir->ifs[1].edit = 1;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 1;
+	sgir->ifs[4].edit = 1;
+	sgir->ifs[5].edit = 1;
+	sgir->ifs[6].edit = 1;
+	sgir->ifs[7].edit = 1;
+	sgir->ifs[8].edit = 1;
+	sgir->ifs[9].edit = 1;
+	sgir->ifs[10].edit = 1;
+	sgir->ifs[11].edit = 1;
+	sgir->ifs[12].edit = 1;
+	sgir->ifs[13].edit = 1;
+	sgir->ifs[14].edit = 1;
+	sgir->ifs[15].edit = 1;
+	sgir->ifs[16].edit = 1;
+	clearform(sgir);
+ssyenisor:
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 1;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 1;
+	sgir->ifs[4].edit = 1;
+	sgir->ifs[5].edit = 1;
+	sgir->ifs[6].edit = 1;
+	sgir->ifs[7].edit = 1;
+	sgir->ifs[8].edit = 1;
+	sgir->ifs[9].edit = 1;
+	sgir->ifs[10].edit = 1;
+	sgir->ifs[11].edit = 1;
+	sgir->ifs[12].edit = 1;
+	sgir->ifs[13].edit = 1;
+	sgir->ifs[14].edit = 1;
+	sgir->ifs[15].edit = 1;
+	sgir->ifs[16].edit = 1;
+	clearform(sgir);
+	strcpy(sgir->ifs[0].text, daire);
+	sgir->ifs[0].edit = 0;
+	
+
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 1;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 0;
+	sgir->ifs[4].edit = 0;
+	sgir->ifs[5].edit = 0;
+	sgir->ifs[6].edit = 0;
+	sgir->ifs[7].edit = 0;
+	sgir->ifs[8].edit = 0;
+	sgir->ifs[9].edit = 0;
+	sgir->ifs[10].edit = 0;
+	sgir->ifs[11].edit = 0;
+	sgir->ifs[12].edit = 0;
+	sgir->ifs[13].edit = 0;
+	sgir->ifs[14].edit = 0;
+	sgir->ifs[15].edit = 0;
+	sgir->ifs[16].edit = 0;
+
+
+	outputform(sgir);
+ssyineden:
+	stat = inputform(sgir);
+	if (stat == 0)return 1;
+	/*---------------------*/
+	strcpy(sdaireno, sgir->ifs[0].text);
+	dress(sdaireno,3);
+	sdaireno[3]=0;
+
+	strcpy(sesassirayil, sgir->ifs[1].text);
+	sesassirayil[4]=0;
+	if(sesassirayil[0]==0){
+		yfmessage("Geçersiz esas sýra yýl");
+		goto ssyineden;
+	}
+
+	sesassirano=atol(sgir->ifs[2].text);
+	if(sesassirano == 0){
+		yfmessage("Geçersiz esas sýra numarasý");
+		goto ssyineden;
+	}
+	yfmessage("Lütfen bekleyiniz...");
+	EXEC SQL SELECT 
+		kararsonucu.daireno, 
+		kararsonucu.esassirayil, 
+		kararsonucu.esassirano,
+		kararsonucu.karsonucu, 
+		kararsonucu.karartarihi, 
+		kararsonucu.kararnumarasi, 
+		kararsonucu.gonderilistarihi,
+
+                gelendosya.geldigitarih,
+                gelendosya.tebligtarih, 
+		gelendosya.tebligmasa, 
+		gelendosya.tebligno, 
+		gelendosya.esasno,
+                gelendosya.kararno, 
+		gelendosya.gonderenmahkeme, 
+		gelendosya.sucunturu,
+                gelendosya.temyizeden, 
+		gelendosya.tutuklu 
+	INTO 	
+		:sdaireno:sind1, :sesassirayil:sind2,
+		:sesassirano:sind3, :skararsonucu:sind4,
+		:skarartarihi:sind5, :skararnumarasi:sind6,
+		:sgonderilistarihi:sind7,
+
+                :geldigitarih:ind4, :tebligtarih:ind5, :tebligmasa:ind6,
+                :tblno:ind7, :esno:ind8, :karno:ind9,
+                :gonderenmahkeme:ind10, :sucunturu:ind11,
+                :temyizeden:ind12, :tutuklu:ind13
+	FROM kararsonucu,gelendosya
+	WHERE
+		
+		kararsonucu.daireno = :sdaireno AND 
+		kararsonucu.esassirayil = :sesassirayil AND
+		kararsonucu.esassirano = :sesassirano	AND
+
+		kararsonucu.id = gelendosya.kararsonucu
+
+	/*	kararsonucu.daireno = gelendosya.daireno AND
+		kararsonucu.esassirayil = gelendosya.esassirayil AND
+		kararsonucu.esassirano = gelendosya.esassirano*/
+	;
+
+	if (SQL_NOTFOUND){
+		yfmessage("Bu sonuç yok");
+		goto ssyineden;
+	}
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"sonuc_sor.SQL_SELECT_kararsonucu",SQL_MESSAGE);
+		yfmessage(SQL_MESSAGE);
+		goto ssyineden;
+	}
+	/*------------- Get data from gelendosya --------------*/
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 0;
+	sgir->ifs[2].edit = 0;
+	sgir->ifs[3].edit = 0;
+	sgir->ifs[4].edit = 0;
+	sgir->ifs[5].edit = 0;
+	sgir->ifs[6].edit = 0;
+	sgir->ifs[7].edit = 0;
+	sgir->ifs[8].edit = 0;
+	sgir->ifs[9].edit = 0;
+	sgir->ifs[10].edit = 0;
+	sgir->ifs[11].edit = 0;
+	sgir->ifs[12].edit = 0;
+	sgir->ifs[13].edit = 0;
+	sgir->ifs[14].edit = 0;
+	sgir->ifs[15].edit = 0;
+	sgir->ifs[16].edit = 0;
+
+	if(sind1 >= 0) strncpy(sgir->ifs[0].text,sdaireno,90);
+	else sgir->ifs[0].text[0]=0;
+	if(sind2 >= 0) strncpy(sgir->ifs[1].text,sesassirayil,90);
+	else sgir->ifs[1].text[0]=0;
+	if(sind3 >= 0) sprintf(sgir->ifs[2].text,"%lu",sesassirano,90);
+	else sgir->ifs[2].text[0]=0;
+	if(sind4 >= 0) strncpy(sgir->ifs[3].text,skararsonucu,90);
+	else sgir->ifs[3].text[0]=0;
+	if(sind5 >= 0) strncpy(sgir->ifs[4].text,skarartarihi,90);
+	else sgir->ifs[4].text[0]=0;
+	if(sind6 >= 0) sprintf(sgir->ifs[5].text,"%lu",skararnumarasi,90);
+	else sgir->ifs[5].text[0]=0;
+	if(sind7 >= 0) strncpy(sgir->ifs[6].text,sgonderilistarihi,90);
+	else sgir->ifs[6].text[0]=0;
+	if(ind4 >= 0) strncpy(sgir->ifs[7].text,geldigitarih,90);
+	else sgir->ifs[7].text[0]=0;
+	if(ind5 >= 0) strncpy(sgir->ifs[8].text,tebligtarih,90);
+	else sgir->ifs[8].text[0]=0;
+	if(ind6 >= 0) strncpy(sgir->ifs[9].text,tebligmasa,90);
+	else sgir->ifs[9].text[0]=0;
+	if(ind7 >= 0) sprintf(sgir->ifs[10].text,"%lu",tblno);
+	else sgir->ifs[10].text[0]=0;
+	if(ind8 >= 0) sprintf(sgir->ifs[11].text,"%lu",esno);
+	else sgir->ifs[11].text[0]=0;
+	if(ind9 >= 0) sprintf(sgir->ifs[12].text,"%lu",karno);
+	else sgir->ifs[12].text[0]=0;
+	if(ind10 >= 0) strncpy(sgir->ifs[13].text,gonderenmahkeme,90);
+	else sgir->ifs[13].text[12]=0;
+	if(ind11 >= 0) strncpy(sgir->ifs[14].text,sucunturu,90);
+	else sgir->ifs[14].text[0]=0;
+	if(ind12 >= 0) strncpy(sgir->ifs[15].text,temyizeden,90);
+	else sgir->ifs[15].text[0]=0;
+	if(ind13 >= 0) strncpy(sgir->ifs[16].text,tutuklu,90);
+	else sgir->ifs[16].text[0]=0;
+	/*-------------------------------------*/
+	nthareket("ceza: sonuc sor");
+	outputform(sgir);
+	yfquestion("Devam etmek için RETURN");
+	yfmessage(" ");
+	goto ssyenisor;
+}
+/**************************** Sonuc Duzeltme ************************/
+sonucduzelt()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+
+	/*------------- Kararsonucu ------------*/
+	long sid;
+	char sdaireno[4];
+	char sesassirayil[5];
+	long sesassirano;
+	char skararsonucu[31];
+	char skarartarihi[11];
+	long skararnumarasi;
+	char sgonderilistarihi[11];
+	short sind1,sind2,sind3,sind4,sind5,sind6,sind7,sind8;
+	/*------------- Gelendosya ------------*/
+        char daireno[4];
+        char esassirayil[5];
+        long esassirano;
+        char geldigitarih[11];
+        char tebligtarih[11];
+	char tebligmasa[3];
+	long tebligno;
+        long esasno;
+        long kararno;
+	char gonderenmahkeme[32];
+	char sucunturu[32];
+	char temyizeden[51];
+	char tutuklu[32];
+
+	long essno;
+	long tblno;
+	long esno;
+	long karno;
+
+	short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+		ind10, ind11, ind12, ind13;
+
+	char buf[100];
+EXEC SQL END DECLARE SECTION;
+
+
+	int stat;
+	int startfield;
+
+	showform(sgir);
+	/* butun alanlari sil. sadece fonksyona ilk girdiginde
+	   yapilacak
+	*/
+	sgir->ifs[0].edit = 1;
+	sgir->ifs[1].edit = 1;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 1;
+	sgir->ifs[4].edit = 1;
+	sgir->ifs[5].edit = 1;
+	sgir->ifs[6].edit = 1;
+	sgir->ifs[7].edit = 1;
+	sgir->ifs[8].edit = 1;
+	sgir->ifs[9].edit = 1;
+	sgir->ifs[10].edit = 1;
+	sgir->ifs[11].edit = 1;
+	sgir->ifs[12].edit = 1;
+	sgir->ifs[13].edit = 1;
+	sgir->ifs[14].edit = 1;
+	sgir->ifs[15].edit = 1;
+	sgir->ifs[16].edit = 1;
+	clearform(sgir);
+sdyenisor:
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 1;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 1;
+	sgir->ifs[4].edit = 1;
+	sgir->ifs[5].edit = 1;
+	sgir->ifs[6].edit = 1;
+	sgir->ifs[7].edit = 1;
+	sgir->ifs[8].edit = 1;
+	sgir->ifs[9].edit = 1;
+	sgir->ifs[10].edit = 1;
+	sgir->ifs[11].edit = 1;
+	sgir->ifs[12].edit = 1;
+	sgir->ifs[13].edit = 1;
+	sgir->ifs[14].edit = 1;
+	sgir->ifs[15].edit = 1;
+	sgir->ifs[16].edit = 1;
+	clearform(sgir);
+	strcpy(sgir->ifs[0].text, daire);
+	sgir->ifs[0].edit = 0;
+	
+
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 1;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 0;
+	sgir->ifs[4].edit = 0;
+	sgir->ifs[5].edit = 0;
+	sgir->ifs[6].edit = 0;
+	sgir->ifs[7].edit = 0;
+	sgir->ifs[8].edit = 0;
+	sgir->ifs[9].edit = 0;
+	sgir->ifs[10].edit = 0;
+	sgir->ifs[11].edit = 0;
+	sgir->ifs[12].edit = 0;
+	sgir->ifs[13].edit = 0;
+	sgir->ifs[14].edit = 0;
+	sgir->ifs[15].edit = 0;
+	sgir->ifs[16].edit = 0;
+
+
+	outputform(sgir);
+sdyineden:
+	stat = inputform(sgir);
+	if (stat == 0)return 1;
+	/*---------------------*/
+	strcpy(sdaireno, sgir->ifs[0].text);
+	sdaireno[3]=0;
+
+	strcpy(sesassirayil, sgir->ifs[1].text);
+	sesassirayil[4]=0;
+	if(sesassirayil[0]==0){
+		yfmessage("Geçersiz esas sýra yýl");
+		goto sdyineden;
+	}
+
+	sesassirano=atol(sgir->ifs[2].text);
+	if(sesassirano == 0){
+		yfmessage("Geçersiz esas sýra numarasý");
+		goto sdyineden;
+	}
+	dress(sdaireno,3);
+	yfmessage("Lütfen bekleyiniz...");
+	EXEC SQL DECLARE sd_ks_cur CURSOR FOR SELECT 
+		kararsonucu.id,
+		kararsonucu.daireno, 
+		kararsonucu.esassirayil, 
+		kararsonucu.esassirano,
+		kararsonucu.karsonucu, 
+		kararsonucu.karartarihi, 
+		kararsonucu.kararnumarasi, 
+		kararsonucu.gonderilistarihi,
+
+                gelendosya.geldigitarih,
+                gelendosya.tebligtarih, 
+		gelendosya.tebligmasa, 
+		gelendosya.tebligno, 
+		gelendosya.esasno,
+                gelendosya.kararno, 
+		gelendosya.gonderenmahkeme, 
+		gelendosya.sucunturu,
+                gelendosya.temyizeden, 
+		gelendosya.tutuklu 
+	FROM kararsonucu,gelendosya
+	WHERE
+		
+		kararsonucu.daireno = :sdaireno AND 
+		kararsonucu.esassirayil = :sesassirayil AND
+		kararsonucu.esassirano = :sesassirano	AND
+
+		kararsonucu.id = gelendosya.kararsonucu
+		/*
+		kararsonucu.daireno = gelendosya.daireno AND
+		kararsonucu.esassirayil = gelendosya.esassirayil AND
+		kararsonucu.esassirano = gelendosya.esassirano
+		*/
+		FOR UPDATE
+	;
+	EXEC SQL OPEN sd_ks_cur;
+	if (SQL_NOTFOUND){
+		yfmessage("Bu sonuç yok");
+		goto sdyineden;
+	}
+	if (SQL_ERROR){
+		yfmessage("Bu sonuç yok");
+		goto sdyineden;
+	}
+	EXEC SQL FETCH sd_ks_cur
+	INTO 	
+		:sid:sind8,
+		:sdaireno:sind1, :sesassirayil:sind2,
+		:sesassirano:sind3, :skararsonucu:sind4,
+		:skarartarihi:sind5, :skararnumarasi:sind6,
+		:sgonderilistarihi:sind7,
+
+                :geldigitarih:ind4, :tebligtarih:ind5, :tebligmasa:ind6,
+                :tblno:ind7, :esno:ind8, :karno:ind9,
+                :gonderenmahkeme:ind10, :sucunturu:ind11,
+                :temyizeden:ind12, :tutuklu:ind13
+	;
+
+	if (SQL_NOTFOUND){
+		yfmessage("Bu sonuç yok");
+		goto sdyineden;
+	}
+	if (SQL_ERROR){
+		yfmessage("Bu sonuç yok");
+		goto sdyineden;
+	}
+	yfmessage(" ");
+	/*------------- Get data from gelendosya --------------*/
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 0;
+	sgir->ifs[2].edit = 0;
+	sgir->ifs[3].edit = 1;
+	sgir->ifs[4].edit = 1;
+	sgir->ifs[5].edit = 1;
+	sgir->ifs[6].edit = 1;
+	sgir->ifs[7].edit = 0;
+	sgir->ifs[8].edit = 0;
+	sgir->ifs[9].edit = 0;
+	sgir->ifs[10].edit = 0;
+	sgir->ifs[11].edit = 0;
+	sgir->ifs[12].edit = 0;
+	sgir->ifs[13].edit = 0;
+	sgir->ifs[14].edit = 0;
+	sgir->ifs[15].edit = 0;
+	sgir->ifs[16].edit = 0;
+
+	if(sind1 >= 0) strncpy(sgir->ifs[0].text,sdaireno,90);
+	else sgir->ifs[0].text[0]=0;
+	if(sind2 >= 0) strncpy(sgir->ifs[1].text,sesassirayil,90);
+	else sgir->ifs[1].text[0]=0;
+	if(sind3 >= 0) sprintf(sgir->ifs[2].text,"%lu",sesassirano,90);
+	else sgir->ifs[2].text[0]=0;
+	if(sind4 >= 0) strncpy(sgir->ifs[3].text,skararsonucu,90);
+	else sgir->ifs[3].text[0]=0;
+	if(sind5 >= 0) strncpy(sgir->ifs[4].text,skarartarihi,90);
+	else sgir->ifs[4].text[0]=0;
+	if(sind6 >= 0) sprintf(sgir->ifs[5].text,"%lu",skararnumarasi,90);
+	else sgir->ifs[5].text[0]=0;
+	if(sind7 >= 0) strncpy(sgir->ifs[6].text,sgonderilistarihi,90);
+	else sgir->ifs[6].text[0]=0;
+	if(ind4 >= 0) strncpy(sgir->ifs[7].text,geldigitarih,90);
+	else sgir->ifs[7].text[0]=0;
+	if(ind5 >= 0) strncpy(sgir->ifs[8].text,tebligtarih,90);
+	else sgir->ifs[8].text[0]=0;
+	if(ind6 >= 0) strncpy(sgir->ifs[9].text,tebligmasa,90);
+	else sgir->ifs[9].text[0]=0;
+	if(ind7 >= 0) sprintf(sgir->ifs[10].text,"%lu",tblno);
+	else sgir->ifs[10].text[0]=0;
+	if(ind8 >= 0) sprintf(sgir->ifs[11].text,"%lu",esno);
+	else sgir->ifs[11].text[0]=0;
+	if(ind9 >= 0) sprintf(sgir->ifs[12].text,"%lu",karno);
+	else sgir->ifs[12].text[0]=0;
+	if(ind10 >= 0) strncpy(sgir->ifs[13].text,gonderenmahkeme,90);
+	else sgir->ifs[13].text[12]=0;
+	if(ind11 >= 0) strncpy(sgir->ifs[14].text,sucunturu,90);
+	else sgir->ifs[14].text[0]=0;
+	if(ind12 >= 0) strncpy(sgir->ifs[15].text,temyizeden,90);
+	else sgir->ifs[15].text[0]=0;
+	if(ind13 >= 0) strncpy(sgir->ifs[16].text,tutuklu,90);
+	else sgir->ifs[16].text[0]=0;
+	/*-------------------------------------*/
+	outputform(sgir);
+
+	startfield=0;
+sdyine2:
+	stat = superinputform(sgir, startfield);
+	if(stat == 0){
+		EXEC SQL ROLLBACK;
+		return 0;
+	}
+	/*-----------------------------------------------------*/
+	/* Insert new values */
+	/*strcpy(sdaireno,	sgir->ifs[0].text);
+	sdaireno[3]=0;
+
+	strcpy(sesassirayil,	sgir->ifs[1].text);
+	sesassirayil[4]=0;
+
+	sesassirano = atol(sgir->ifs[2].text);*/
+
+        strcpy(skararsonucu,    sgir->ifs[3].text);
+        skararsonucu[30]=0;
+	if(skararsonucu[0] == 0){
+		yfmessage("Karar sonucu geçersiz");
+		startfield = 3;
+		goto sdyine2;
+	}
+
+	strcpy(skarartarihi,sgir->ifs[4].text);
+	skarartarihi[10]=0;
+	if(skarartarihi[0] == 0){
+		yfmessage("Karar tarihi geçersiz");
+		startfield = 4;
+		goto sdyine2;
+	}
+
+	skararnumarasi = atol(sgir->ifs[5].text);
+	if(skararnumarasi == 0){
+		yfmessage("Karar numarasý geçersiz");
+		startfield = 5;
+		goto sdyine2;
+	}
+
+	strcpy(sgonderilistarihi,	sgir->ifs[6].text);
+	sgonderilistarihi[10]=0;
+	if(sgonderilistarihi[0] == 0){
+		yfmessage("Gönderiliþ tarihi geçersiz");
+		startfield = 6;
+		goto sdyine2;
+	}
+
+	
+	KAYIT_GIRILSIN_MI;
+        if (stat == 'e' || stat == 'E'){
+	sprintf(buf,"%d",sesassirano);
+	strcpy(buf,sdaireno);
+	dress(buf,3);
+	EXEC SQL UPDATE kararsonucu SET
+		karsonucu = :skararsonucu,
+		karartarihi = :skarartarihi,
+		kararnumarasi =  :skararnumarasi,
+		gonderilistarihi = :sgonderilistarihi
+	WHERE 
+		id = :sid
+		/*CURRENT OF sd_ks_cur*/
+		/*daireno 	= :sdaireno AND
+		esassirayil	= :sesassirayil AND
+		esassirano	= :sesassirano
+		*/
+	;
+
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"sonuc_duzelt.SQL_UPDATE",SQL_MESSAGE);
+		yfmessage(SQL_MESSAGE);
+		goto sdyine2;
+	}
+	sprintf(buf,"ceza: sonuc duzelt (%d)",sqlca.sqlcode);
+	nthareket(buf);
+		{
+		char	x1[1024];
+		/*char	x2[1024];
+		char	x3[1024];
+		char	x4[1024];
+		char	x5[1024];
+		char	x6[1024];
+		char	x7[1024];
+		char	x8[1024];
+		char	x9[1024];
+		char	x10[1024];
+		char	x11[1024];
+		char	x12[1024];*/
+		strcpy(x1, quote(skararsonucu));
+	ntchanges("UPDATE kararsonucu SET\n"
+		"\tkarsonucu	= '%s', \n"
+		"\tkarartarihi 	= '%s', \n"
+		"\tkararnumarasi= %lu, \n"
+		"\tgonderilistarihi= '%s'\n"
+		"WHERE\n"
+		"\tdaireno 	= '%s' AND\n"
+		"\tesassirayil	= '%s' AND\n"
+		"\tesassirano	= %lu;\n",
+		x1, 
+		/*skararsonucu, */
+		skarartarihi, 
+		skararnumarasi,
+		sgonderilistarihi, 
+			/*WHERE */
+		sdaireno,
+		sesassirayil,
+		sesassirano
+	);
+	}
+	nthareket("ceza: sonuc duzelt");
+	yfmessage("Kayýt kaydedildi");
+	EXEC SQL CLOSE sd_ks_cur;
+	EXEC SQL COMMIT WORK ;
+	} else {
+		EXEC SQL CLOSE sd_ks_cur;
+		EXEC SQL ROLLBACK;
+		yfmessage("Kayýt iptal edildi");
+	}
+	goto sdyenisor;
+}
+/**************************** Sonuc Silme ************************/
+sonucsil()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+
+	/*------------- Kararsonucu ------------*/
+	long sid;
+	char sdaireno[4];
+	char sesassirayil[5];
+	long sesassirano;
+	char skararsonucu[31];
+	char skarartarihi[11];
+	long skararnumarasi;
+	char sgonderilistarihi[11];
+	short sind1,sind2,sind3,sind4,sind5,sind6,sind7,sind8;
+	/*------------- Gelendosya ------------*/
+        char daireno[4];
+        char esassirayil[5];
+        long esassirano;
+        char geldigitarih[11];
+        char tebligtarih[11];
+	char tebligmasa[3];
+	long tebligno;
+        long esasno;
+        long kararno;
+	char gonderenmahkeme[32];
+	char sucunturu[32];
+	char temyizeden[51];
+	char tutuklu[32];
+
+	long essno;
+	long tblno;
+	long esno;
+	long karno;
+
+	short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+		ind10, ind11, ind12, ind13;
+
+EXEC SQL END DECLARE SECTION;
+
+
+	char buf[10];
+	int stat;
+
+	showform(sgir);
+	/* butun alanlari sil. sadece fonksyona ilk girdiginde
+	   yapilacak
+	*/
+	sgir->ifs[0].edit = 1;
+	sgir->ifs[1].edit = 1;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 1;
+	sgir->ifs[4].edit = 1;
+	sgir->ifs[5].edit = 1;
+	sgir->ifs[6].edit = 1;
+	sgir->ifs[7].edit = 1;
+	sgir->ifs[8].edit = 1;
+	sgir->ifs[9].edit = 1;
+	sgir->ifs[10].edit = 1;
+	sgir->ifs[11].edit = 1;
+	sgir->ifs[12].edit = 1;
+	sgir->ifs[13].edit = 1;
+	sgir->ifs[14].edit = 1;
+	sgir->ifs[15].edit = 1;
+	sgir->ifs[16].edit = 1;
+	clearform(sgir);
+ssilyenisor:
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 1;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 1;
+	sgir->ifs[4].edit = 1;
+	sgir->ifs[5].edit = 1;
+	sgir->ifs[6].edit = 1;
+	sgir->ifs[7].edit = 1;
+	sgir->ifs[8].edit = 1;
+	sgir->ifs[9].edit = 1;
+	sgir->ifs[10].edit = 1;
+	sgir->ifs[11].edit = 1;
+	sgir->ifs[12].edit = 1;
+	sgir->ifs[13].edit = 1;
+	sgir->ifs[14].edit = 1;
+	sgir->ifs[15].edit = 1;
+	sgir->ifs[16].edit = 1;
+	strcpy(sgir->ifs[0].text, daire);
+	sgir->ifs[0].edit = 0;
+	clearform(sgir);
+	
+
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 1;
+	sgir->ifs[2].edit = 1;
+	sgir->ifs[3].edit = 0;
+	sgir->ifs[4].edit = 0;
+	sgir->ifs[5].edit = 0;
+	sgir->ifs[6].edit = 0;
+	sgir->ifs[7].edit = 0;
+	sgir->ifs[8].edit = 0;
+	sgir->ifs[9].edit = 0;
+	sgir->ifs[10].edit = 0;
+	sgir->ifs[11].edit = 0;
+	sgir->ifs[12].edit = 0;
+	sgir->ifs[13].edit = 0;
+	sgir->ifs[14].edit = 0;
+	sgir->ifs[15].edit = 0;
+	sgir->ifs[16].edit = 0;
+
+
+	outputform(sgir);
+ssilyineden:
+	stat = inputform(sgir);
+	if (stat == 0)return 1;
+	/*---------------------*/
+	strcpy(sdaireno, sgir->ifs[0].text);
+	dress(sdaireno,3);
+	sdaireno[3]=0;
+
+	strcpy(sesassirayil, sgir->ifs[1].text);
+	sesassirayil[4]=0;
+	if(sesassirayil[0]==0){
+		yfmessage("Geçersiz esas sýra yýl");
+		goto ssilyineden;
+	}
+
+	sesassirano=atol(sgir->ifs[2].text);
+	if(sesassirano == 0){
+		yfmessage("Geçersiz esas sýra numarasý");
+		goto ssilyineden;
+	}
+	yfmessage("Lütfen bekleyiniz...");
+	EXEC SQL SELECT 
+		kararsonucu.id,
+		kararsonucu.daireno, 
+		kararsonucu.esassirayil, 
+		kararsonucu.esassirano,
+		kararsonucu.karsonucu, 
+		kararsonucu.karartarihi, 
+		kararsonucu.kararnumarasi, 
+		kararsonucu.gonderilistarihi,
+
+                gelendosya.geldigitarih,
+                gelendosya.tebligtarih, 
+		gelendosya.tebligmasa, 
+		gelendosya.tebligno, 
+		gelendosya.esasno,
+                gelendosya.kararno, 
+		gelendosya.gonderenmahkeme, 
+		gelendosya.sucunturu,
+                gelendosya.temyizeden, 
+		gelendosya.tutuklu 
+	INTO 	
+		:sid:sind8,
+		:sdaireno:sind1, :sesassirayil:sind2,
+		:sesassirano:sind3, :skararsonucu:sind4,
+		:skarartarihi:sind5, :skararnumarasi:sind6,
+		:sgonderilistarihi:sind7,
+
+                :geldigitarih:ind4, :tebligtarih:ind5, :tebligmasa:ind6,
+                :tblno:ind7, :esno:ind8, :karno:ind9,
+                :gonderenmahkeme:ind10, :sucunturu:ind11,
+                :temyizeden:ind12, :tutuklu:ind13
+	FROM kararsonucu,gelendosya
+	WHERE
+		
+		kararsonucu.daireno = :sdaireno AND 
+		kararsonucu.esassirayil = :sesassirayil AND
+		kararsonucu.esassirano = :sesassirano	AND
+
+		gelendosya.kararsonucu = kararsonucu.id
+		/*kararsonucu.daireno = gelendosya.daireno AND
+		kararsonucu.esassirayil = gelendosya.esassirayil AND
+		kararsonucu.esassirano = gelendosya.esassirano*/
+	;
+
+	if (SQL_NOTFOUND){
+		yfmessage("Bu sonuç yok");
+		goto ssilyineden;
+	}
+	/*------------- Get data from gelendosya --------------*/
+	sgir->ifs[0].edit = 0;
+	sgir->ifs[1].edit = 0;
+	sgir->ifs[2].edit = 0;
+	sgir->ifs[3].edit = 1;
+	sgir->ifs[4].edit = 1;
+	sgir->ifs[5].edit = 1;
+	sgir->ifs[6].edit = 1;
+	sgir->ifs[7].edit = 0;
+	sgir->ifs[8].edit = 0;
+	sgir->ifs[9].edit = 0;
+	sgir->ifs[10].edit = 0;
+	sgir->ifs[11].edit = 0;
+	sgir->ifs[12].edit = 0;
+	sgir->ifs[13].edit = 0;
+	sgir->ifs[14].edit = 0;
+	sgir->ifs[15].edit = 0;
+	sgir->ifs[16].edit = 0;
+
+	if(sind1 >= 0) strncpy(sgir->ifs[0].text,sdaireno,90);
+	else sgir->ifs[0].text[0]=0;
+	if(sind2 >= 0) strncpy(sgir->ifs[1].text,sesassirayil,90);
+	else sgir->ifs[1].text[0]=0;
+	if(sind3 >= 0) sprintf(sgir->ifs[2].text,"%lu",sesassirano,90);
+	else sgir->ifs[2].text[0]=0;
+	if(sind4 >= 0) strncpy(sgir->ifs[3].text,skararsonucu,90);
+	else sgir->ifs[3].text[0]=0;
+	if(sind5 >= 0) strncpy(sgir->ifs[4].text,skarartarihi,90);
+	else sgir->ifs[4].text[0]=0;
+	if(sind6 >= 0) sprintf(sgir->ifs[5].text,"%lu",skararnumarasi,90);
+	else sgir->ifs[5].text[0]=0;
+	if(sind7 >= 0) strncpy(sgir->ifs[6].text,sgonderilistarihi,90);
+	else sgir->ifs[6].text[0]=0;
+	if(ind4 >= 0) strncpy(sgir->ifs[7].text,geldigitarih,90);
+	else sgir->ifs[7].text[0]=0;
+	if(ind5 >= 0) strncpy(sgir->ifs[8].text,tebligtarih,90);
+	else sgir->ifs[8].text[0]=0;
+	if(ind6 >= 0) strncpy(sgir->ifs[9].text,tebligmasa,90);
+	else sgir->ifs[9].text[0]=0;
+	if(ind7 >= 0) sprintf(sgir->ifs[10].text,"%lu",tblno);
+	else sgir->ifs[10].text[0]=0;
+	if(ind8 >= 0) sprintf(sgir->ifs[11].text,"%lu",esno);
+	else sgir->ifs[11].text[0]=0;
+	if(ind9 >= 0) sprintf(sgir->ifs[12].text,"%lu",karno);
+	else sgir->ifs[12].text[0]=0;
+	if(ind10 >= 0) strncpy(sgir->ifs[13].text,gonderenmahkeme,90);
+	else sgir->ifs[13].text[12]=0;
+	if(ind11 >= 0) strncpy(sgir->ifs[14].text,sucunturu,90);
+	else sgir->ifs[14].text[0]=0;
+	if(ind12 >= 0) strncpy(sgir->ifs[15].text,temyizeden,90);
+	else sgir->ifs[15].text[0]=0;
+	if(ind13 >= 0) strncpy(sgir->ifs[16].text,tutuklu,90);
+	else sgir->ifs[16].text[0]=0;
+	/*-------------------------------------*/
+	outputform(sgir);
+ssilyine2:
+	stat = yfquestion("Bu kayýt silinsin mi? (e/h)");
+	if (stat == 'e' || stat == 'E'){
+	
+		EXEC SQL UPDATE gelendosya SET kararsonucu = 0 
+		WHERE 
+			kararsonucu = :sid
+			/*daireno 	= :sdaireno AND
+			esassirayil	= :sesassirayil AND
+			esassirano	= :sesassirano*/
+		;
+		if (SQL_ERROR){
+			ntlog2(LOG_CEZA,"sonuc_sil.SQL_DELETE",SQL_MESSAGE);
+			yfmessage(SQL_MESSAGE);
+			goto ssilyine2;
+		}
+		EXEC SQL DELETE FROM kararsonucu 
+		WHERE 
+			id = :sid
+		/*	daireno 	= :sdaireno AND
+			esassirayil	= :sesassirayil AND
+			esassirano	= :sesassirano*/
+		;
+
+		if (SQL_ERROR){
+			ntlog2(LOG_CEZA,"sonuc_sil.SQL_DELETE",SQL_MESSAGE);
+			yfquestion(SQL_MESSAGE);
+			goto ssilyine2;
+		}
+		ntchanges("DELETE FROM kararsonucu\n"
+			"\tWHERE\n"
+			"\tdaireno\t=\t'%s' AND\n"
+			"\tesassirayil\t=\t'%s' AND\n"
+			"\tesassirano\t=\t%lu;\n",
+			sdaireno,
+			sesassirayil,
+			sesassirano
+		);
+		nthareket("ceza: sonuc sil");
+		EXEC SQL COMMIT WORK ;
+		yfmessage("Kayýt silindi");
+	}else yfmessage("Silme iptal edildi");
+	EXEC SQL ROLLBACK;
+	goto ssilyenisor;
+}

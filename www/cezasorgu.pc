@@ -1,0 +1,356 @@
+#include <stdio.h>
+#include <string.h>
+#include "cgi.h"
+#include "wwwtools.h"
+
+#define SQL_ERROR       sqlca.sqlcode < 0
+#define SQL_NOTFOUND    sqlca.sqlcode == 1403
+#define SQL_MESSAGE     sqlca.sqlerrm.sqlerrmc
+
+EXEC SQL BEGIN DECLARE SECTION;
+VARCHAR uid[10];
+VARCHAR pwd[10];
+
+        /*------------- Kararsonucu ------------*/
+        char sdaireno[4];
+        char sesassirayil[3];
+        long sesassirano;
+        char skararsonucu[31];
+        char skarartarihi[11];
+        long skararnumarasi;
+        char sgonderilistarihi[11];
+        short sind1,sind2,sind3,sind4,sind5,sind6,sind7;
+        /*------------- Gelendosya ------------*/
+        char daireno[100];
+        char esassirayil[100];
+        char esassirano[100];
+        char geldigitarih[100];
+        char tebligtarih[100];
+        char tebligmasa[100];
+        char tebligno[100];
+        char esasno[100];
+        char kararno[100];
+        char gonderenmahkeme[100];
+        char sucunturu[100];
+        char temyizeden[100];
+        char tutuklu[100];
+	long p_kararsonucu;
+
+	long essno;
+	long tblno;
+	long esno;
+	long karno;
+
+	char buf[1000];
+	short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+		ind10, ind11, ind12, ind13, ind14;
+
+EXEC SQL END DECLARE SECTION;
+EXEC SQL INCLUDE SQLCA;
+
+char *cgiDebug;
+
+cgiMain()
+{
+	int i;
+	int waswhere = 0;
+	int nosonuc = 0;
+	int firsttime = 1;
+
+
+        putenv("ORACLE_SID=yargitay");
+        putenv("ORACLE_HOME=/u01/oracle/product/8.0.5");
+        putenv("LD_LIBRARY_PATH=/u01/oracle/product/8.0.5/lib");
+        putenv("NLS_LANG=TURKISH_TURKEY.WE8ISO8859P9");
+
+        strcpy (uid.arr,"sorgu");
+        uid.len=strlen(uid.arr);
+        strcpy (pwd.arr,"sorgu");
+        pwd.len=strlen(pwd.arr);
+
+        cgiHeaderContent("text/html");
+        cgiHtmlHead("Ceza Daireleri Sorgu Sonucu");
+        cgiPrintf(
+        "<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=iso-8859-9\">");
+	cgiPrintf(
+	"<BODY TEXT=\"#000000\" BGCOLOR=\"#FFFFFF\" LINK=\"#FF0000\""
+	" VLINK=\"#3333FF\""
+	"ALINK=\"#FF0000\">"
+	"<center>"
+	"</img><img src=\"http://yargitay.gov.tr/images/yargi.JPG\"></img>"
+	"<br>"
+	"Ana sayfa için <a href=\"http://www.yargitay.gov.tr/\">http://www.yargitay.gov.tr</a>"
+	" týklayýnýz" 
+        "</center>"
+	"<HR>");
+
+        /*EXEC SQL WHENEVER SQLERROR DO errprint();*/
+        EXEC SQL CONNECT :uid IDENTIFIED BY :pwd;
+	if(SQL_ERROR){
+		cgiPrintf("Veritabaný þu an bakým altýnda. Sonra deneyin. <p>BÝM");
+        /*	cgiPrintf(SQL_MESSAGE);*/
+		exit(0);
+	}
+
+
+
+	strcpy(daireno, 	 cgiFormGetVal("daireno"));
+	strcpy(esassirayil,	 cgiFormGetVal("esassirayil"));
+	strcpy(esassirano,	 cgiFormGetVal("esassirano"));
+	strcpy(geldigitarih,	 cgiFormGetVal("geldigitarih"));
+	strcpy(tebligtarih,	 cgiFormGetVal("tebligtarih"));
+	strcpy(tebligmasa,	 cgiFormGetVal("tebligmasa"));
+	strcpy(tebligno,	 cgiFormGetVal("tebligno"));
+	strcpy(esasno,		 cgiFormGetVal("esasno"));
+	strcpy(kararno,		 cgiFormGetVal("kararno"));
+	strcpy(gonderenmahkeme,	 cgiFormGetVal("gonderenmahkeme"));
+	strcpy(sucunturu,	 cgiFormGetVal("sucunturu"));
+	strcpy(temyizeden,	 cgiFormGetVal("temyizeden"));
+	strcpy(tutuklu,		 cgiFormGetVal("tutuklu"));
+	
+
+        strcpy(buf,"select "
+                "daireno, esassirayil, esassirano, geldigitarih,"
+                "tebligtarih, tebligmasa, tebligno, esasno,"
+                "kararno, gonderenmahkeme, sucunturu,"
+                "temyizeden, tutuklu, kararsonucu "
+                "from ceza.gelendosya "); 
+	/***********************/
+        if(daireno[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," daireno like '");
+                strcat(buf,quote(daireno));
+                strcat(buf,"%'");
+        }
+        if(esassirayil[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," esassirayil like '");
+                strcat(buf,quote(esassirayil));
+                strcat(buf,"%'");
+        }
+        if(esassirano[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," esassirano =");
+                strcat(buf,quote(esassirano));
+        }
+        if(geldigitarih[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," geldigitarih = '");
+                strcat(buf,quote(geldigitarih));
+                strcat(buf,"'");
+        }
+        if(tebligtarih[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," tebligtarih = '");
+                strcat(buf,quote(tebligtarih));
+                strcat(buf,"'");
+        }
+        if(tebligmasa[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," tebligmasa like '");
+                strcat(buf,quote(tebligmasa));
+                strcat(buf,"%'");
+        }
+        if(tebligno[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," tebligno =");
+                strcat(buf,quote(tebligno));
+        }
+        if(esasno[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," esasno =");
+                strcat(buf,quote(esasno));
+        }
+        if(kararno[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," kararno =");
+                strcat(buf,quote(kararno));
+        }
+        if(gonderenmahkeme[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," gonderenmahkeme like '");
+                strcat(buf,quote(gonderenmahkeme));
+                strcat(buf,"%'");
+        }
+        if(sucunturu[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," sucunturu like '");
+                strcat(buf,quote(sucunturu));
+                strcat(buf,"%'");
+        }
+        if(temyizeden[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," temyizeden like '");
+                strcat(buf,quote(temyizeden));
+                strcat(buf,"%'");
+        }
+        if(tutuklu[0]!=0){
+                if(!waswhere){strcat(buf," where ");waswhere=1;}
+                else strcat(buf," and ");
+                strcat(buf," tutuklu like '");
+                strcat(buf,quote(tutuklu));
+                strcat(buf,"%'");
+        }
+
+
+	EXEC SQL PREPARE s1 FROM :buf;
+	if(SQL_ERROR){
+        	cgiPrintf(SQL_MESSAGE);
+		exit(0);
+	}
+	EXEC SQL declare cur cursor for s1;
+	if(SQL_ERROR){
+        	cgiPrintf(SQL_MESSAGE);
+		exit(0);
+	}
+	EXEC SQL open cur ;
+	if(SQL_ERROR){
+        	cgiPrintf(SQL_MESSAGE);
+		exit(0);
+	}
+
+	for(i=0;i<55;i++){
+	EXEC SQL fetch cur into
+		:daireno:ind1, :esassirayil:ind2, :essno:ind3,
+		:geldigitarih:ind4, :tebligtarih:ind5, :tebligmasa:ind6,
+		:tblno:ind7, :esno:ind8, :karno:ind9,
+		:gonderenmahkeme:ind10, :sucunturu:ind11,
+		:temyizeden:ind12, :tutuklu:ind13,
+		:p_kararsonucu:ind14
+	;
+	if(SQL_ERROR){
+        	cgiPrintf(SQL_MESSAGE);
+		exit(0);
+	}
+	if(SQL_NOTFOUND){
+		if(firsttime){
+			cgiPrintf("<p>Hiçbir kayýt bulunamadý<p>");
+		}
+		break;
+	}
+	firsttime = 0;
+	if(p_kararsonucu == 0){
+		nosonuc = 1;
+	}else{
+
+        	/* simdi sonuc var mi bakalim... */
+       	EXEC SQL SELECT
+              	 karsonucu,
+                karartarihi,
+                kararnumarasi,
+                gonderilistarihi
+        INTO
+                :skararsonucu:sind4,
+                :skarartarihi:sind5, :skararnumarasi:sind6,
+                :sgonderilistarihi:sind7
+
+        FROM ceza.kararsonucu
+        WHERE
+
+		kararsonucu.id = :p_kararsonucu
+
+       /*         kararsonucu.daireno = :daireno AND
+                kararsonucu.esassirayil = :esassirayil AND
+                kararsonucu.esassirano = :essno
+*/
+
+        ;
+	if(SQL_ERROR){
+        	cgiPrintf(SQL_MESSAGE);
+		exit(0);
+	}
+	if(SQL_NOTFOUND){
+		nosonuc = 1;
+	}
+	}
+        /***************************************************/
+
+	if(ind1 >= 0) daireno[3]=0; else daireno[0]=0;
+	if(ind2 >= 0) esassirayil[2]=0;else esassirayil[2]=0;
+	if(ind3 >= 0) sprintf(esassirano, "%u", essno); else esassirano[0] = 0;
+	if(ind4 >= 0) geldigitarih[10]=0; else geldigitarih[0]=0;
+	if(ind5 >= 0) tebligtarih[10]=0; else tebligtarih[0]=0;
+	if(ind6 >= 0) tebligmasa[2]=0; else tebligmasa[0]=0;
+	if(ind7 >= 0) sprintf(tebligno, "%u", tblno); else tebligno[0] = 0;
+	if(ind8 >=  0) sprintf(esasno, "%u", esno); else esasno[0] = 0;
+	if(ind9 >=  0) sprintf(kararno, "%u", karno); else kararno[0] = 0;
+	if(ind10 >= 0) gonderenmahkeme[31]=0; else gonderenmahkeme[0]=0;
+	if(ind11 >= 0) sucunturu[31]=0; else sucunturu[0]=0;
+	if(ind12 >= 0) temyizeden[50]=0; else temyizeden[0]=0;
+	if(ind13 >= 0) tutuklu[31]=0; else tutuklu[0]=0;
+
+        cgiPrintf(
+	"<table>"
+	"<tr><td><td><b>Daire Numarasý	</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Esas Sýra Yýl	</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Esas Sýra No	</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Geldiði Tarih	</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Teblið Tarihi	</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Teblið Masasý	</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Teblið Numarasý	</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Esas No		</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Karar No	</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Gönderen mahkeme</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Sucun türü	</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Temyiz eden	</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Tutuklu		</b></td><td>%s</td></tr>"
+        "</table>"
+	,
+		daireno, esassirayil, esassirano,
+		geldigitarih, tebligtarih, tebligmasa,
+		tebligno, esasno, kararno,
+		gonderenmahkeme, sucunturu,
+		temyizeden, tutuklu);
+	cgiPrintf(
+	"------------ Karar sonucu -------------<br>");
+	if(nosonuc){
+		cgiPrintf("<b>Bu dosya sonuca baðlanmamýþtýr</b>");
+	}else{
+	cgiPrintf(
+	"<table>"
+	"<tr><td><td><b>Karar</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Karar tarihi</b></td><td>%s</td></tr>"
+	"<tr><td><td><b>Karar numarasi</b></td><td>%d</td></tr>"
+	"<tr><td><td><b>Gönderiliþ tarihi</b></td><td>%s</td></tr>"
+	"</table>",
+                skararsonucu,
+                skarartarihi, skararnumarasi,
+                sgonderilistarihi
+	);
+	}
+	cgiPrintf("<hr>");
+	nosonuc = 0;
+
+	
+	if(i==20){
+		cgiPrintf("<br>Girdýðýnýz sorgu 20 kayýttan fazla getirdi"
+		"<br>Sorguyu daraltýnýz ve yeniden deneyiniz");
+		break;
+	}
+		
+
+	}
+	EXEC SQL CLOSE cur;
+	cgiPrintf("</body></html>");
+
+}
+errprint()
+{
+   /* EXEC SQL WHENEVER SQLERROR CONTINUE;*/
+    cgiPrintf("<b>Veritabaný hatasý:</b>");
+    cgiPrintf("%s\n",sqlca.sqlerrm.sqlerrmc);
+    exit(1);
+}
+

@@ -1,0 +1,23 @@
+      Sayýn Kullanýcýmýz,
+      Bildiðiniz gibi bigisayar dünyasýnda `2000 yýlý sorunu'ndan etkilenen
+ileri düþümeksizin yapýlan projeler son günlerde dünya çapýnda mühendislerin 
+baþaðrýsý oldu. Dört yýllýk geçmiþe sahip olan Yargýtay Evrak projesinin de 
+yazýk ki bu tür sorunlar vardýr. 29 aralýk 1999 gününde yapýlan son 
+düznlemeler bu sorunlarý gidermek amacýyla gerçekleþtirilmiþtir.
+      Sistemimizin en büyük sorunu Esas sýra yýl alaný 2 hanelik olmasýdýr.
+Bu alan 4 haneye çýartýlmýþtýr, ekrandaki Esas sýra yýl için ayarlanmýþ 
+olan alan [yy  ] þekilde karþýnýza çýkacaktýr. `yy' alaný 1 ocak 2000 
+yýlýna kadar 19, 1 ocaktan sonra ise 20 olarak ekranýnýzda görüntülecektir. 
+Bu alanýn içindeyken Ctrl-Y tuþu basýldýðýnda 19 ile 20 arasýnda 
+deðiþecektir. Böylece bu yýlda 2000 yýlýna ait ve 2000 yýlýnda 1999 yýlýna 
+ait olan Esas sýra yýl numaralarý girilebilecektir. Buðüne girilmiþ olan 
+kayýtlar baþýna `19' eklemek süretiyle 4 haneye çýkartýlmýþtýr.
+      Ayný davranýþ [  /  /yy  ] þeklinde olan tarih alanlarý da 
+sergilemektedir.  Bu alanda Ctrl-Y basarak yüzyýlý kolayca 
+deðiþtirebileceksiniz.
+
+                                                       Nikolay Tufar,
+                                                      Sistem Programcýsý
+
+
+Devam için herhangi bir tuþa basýnýz~

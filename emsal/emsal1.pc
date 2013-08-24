@@ -1,0 +1,1211 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <malloc.h>
+#include "yf.h"
+#include "tools.h"
+#include "emsal.h"
+EXEC SQL INCLUDE SQLCA;
+
+
+int karagoster(char *ikavram, int kendi);
+int kgmetin(char *iesas, char *idaire);
+
+kara(kendi)
+int kendi;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char daireno[4];
+char esasno[10];
+char kavram[76];
+
+/*char kmetin[1024*100];
+*/
+char kdaireno[4];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+long count1;
+char nakeddaire[4];
+char dresseddaire[5];
+EXEC SQL END DECLARE SECTION;
+
+	char **mbuf;
+	long *mcount;
+	int i,k;
+	int stat;
+	int quit;
+	int pointer;
+
+	nthareket("emsal: kavram arama");
+karabootstrap:
+	if(daire[0]=='t')kendi = 0;
+	else kendi = 1;
+	stat=quit=pointer=0;
+	clearform(fkara);
+	
+	strcpy(nakeddaire,daire);
+	strcpy(dresseddaire,daire);
+	strip(nakeddaire);
+	dress(dresseddaire,3);
+        yfmessage("Lütfen bekleyiniz...");
+	if(kendi){
+		EXEC SQL SELECT count(distinct kavram) INTO :count:ind0
+			FROM kavram	
+			WHERE daireno = :dresseddaire OR daireno=:nakeddaire
+		;
+	}else{
+		EXEC SQL SELECT count(distinct kavram) INTO :count:ind0
+			FROM kavram	
+		;
+	}
+        if(SQL_ERROR){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+          	yfquestion(SQL_MESSAGE);
+         	return 0;
+  	}
+      	if(SQL_NOTFOUND || count == 0){
+               	yfquestion("Hiçbir kavram bulunmamýþtýr");
+		strcpy(daire,"tüm");
+               	return 0;
+       	}
+	if((mbuf = (char**)malloc(count*sizeof(char*)))==NULL){
+		yfquestion("Bellek yetersiz");
+		return 0;
+	}
+	if((mcount = (long*)malloc(count*sizeof(long)))==NULL){
+		yfquestion("Bellek yetersiz");
+		free(mbuf);
+		return 0;
+	}
+	if(kendi){
+		EXEC SQL DECLARE kcur CURSOR FOR
+			SELECT kavram, count(kavram)
+			FROM kavram
+			WHERE daireno = :dresseddaire OR daireno=:nakeddaire
+			GROUP BY kavram
+			ORDER BY kavram;
+		;
+	}else{
+		EXEC SQL DECLARE kkendicur CURSOR FOR
+			SELECT kavram, count(kavram)
+			FROM kavram
+			GROUP BY kavram
+			ORDER BY kavram;
+		;	
+	}
+	if(kendi)EXEC SQL OPEN kcur;
+	else EXEC SQL OPEN kkendicur;
+        if(SQL_ERROR || SQL_NOTFOUND){
+               	yfquestion(SQL_MESSAGE);
+		free(mbuf);
+		free(mcount);
+               	return 0;
+       	}
+
+	for(i=0; i < count; i++){
+		if(kendi)EXEC SQL FETCH kcur INTO :kavram:ind0, :count1:ind2;
+		else EXEC SQL FETCH kkendicur INTO :kavram:ind0, :count1:ind2;
+        	if(SQL_ERROR || SQL_NOTFOUND){
+               		yfquestion(SQL_MESSAGE);
+			free(mbuf);
+			free(mcount);
+               		return 0;
+       		}
+		mbuf[i]=strdup(kavram);
+		mcount[i]=count1;
+	}
+	if(kendi)EXEC SQL CLOSE kcur;
+	else EXEC SQL CLOSE kkendicur;
+	yfmessage(" ");
+	while(1){
+		for(i=0; i<15;i++){
+			strcpy(fkara->ifs[i].text,"");
+			fkara->ifs[i].show = 1;
+		}
+		for(i = pointer;i<pointer+15;i++){
+			if(i>=count){
+				sprintf(fkara->ifs[i-pointer].text, "");
+				fkara->ifs[i-pointer].show = 0;
+			}else{
+			sprintf(fkara->ifs[i-pointer].text,"%4u | ",mcount[i]);
+			strncat(fkara->ifs[i-pointer].text,mbuf[i],60);
+			}
+		}
+		sprintf(fkara->lines[0],
+				"Kavram ile Arama          "
+				"                                     "
+				" Sayfa: %u/%u",pointer/15+1, (count-1)/15+1);
+		sprintf(fkara->lines[1],
+				"Daire: %s      ",kendi?daire:"tüm daireler");
+			
+		showform(fkara);
+		outputform(fkara);
+		stat = supermenu(fkara,stat);
+		if(stat == 0xffff){
+			pointer+=15;
+			if(pointer>=count-1)pointer-=15;
+			stat = 0;
+			continue;
+		}
+		if(stat == 0xfffd){
+			pointer-=15;
+			if(pointer<0)pointer=0;
+			stat = 0;
+			continue;
+		}
+		if(stat == 0xfffc){
+			dosetdaire();
+			goto karabootstrap;
+		}
+		if(stat == 0xfffe)break;
+		if(stat > 0xf000 && stat < (0xf000 + 0xfff)){
+			quit = 0;
+			for(i = 0; i <count;i++){
+				if((unsigned char)mbuf[i][0]==(stat - 0xf000)){
+					pointer = i - i%15;	
+					quit = 1;
+					break;
+				}
+			}
+			if(quit)stat = i%15;
+			else stat = 0;
+			continue;
+		}
+		karagoster(mbuf[pointer+stat],kendi);
+	}
+	for(i = 0;i<count;i++)free(mbuf[i]);
+	free(mbuf);
+	free(mcount);
+		
+}
+/*--------------------------------------------*/
+karagoster(ikavram,kendi)
+char *ikavram;
+int kendi;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char daireno[4];
+char esasno[10];
+char kavram[76];
+char dkavram[76];
+
+char kmetin[1024*100];
+char kdaireno[4];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+long count1;
+char nakeddaire[4];
+char dresseddaire[4];
+EXEC SQL END DECLARE SECTION;
+
+	int i, k;
+	int quit = 0;
+	int stat = 0;
+	char **mbuf;
+	char **mdaire;
+	int pointer=0;
+	char buf[100];
+
+	strcpy(kavram, ikavram);
+	dress(kavram,75);
+
+	clearform(fkara1);
+
+	dress(kavram,75);
+        yfmessage("Lütfen bekleyiniz...");
+	strcpy(nakeddaire,daire);
+	strcpy(dresseddaire,daire);
+	strip(nakeddaire);
+	dress(dresseddaire,3);
+
+	strip(kavram);
+	strcpy(dkavram,kavram);
+	dress(dkavram,75);
+	if(kendi){
+		EXEC SQL 
+			SELECT count(esasno) INTO :count:ind1
+			FROM kavram
+			WHERE
+			(daireno=:nakeddaire OR daireno = :dresseddaire) AND
+		  	(kavram = :kavram OR kavram = :dkavram)
+			ORDER BY esasno;
+		;
+	}else{
+		EXEC SQL 
+			SELECT count(esasno) INTO :count:ind1
+			FROM kavram
+			WHERE
+		  	(kavram = :kavram OR kavram = :dkavram)
+			ORDER BY esasno;
+		;
+	}
+        if(SQL_ERROR){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+          	yfquestion(SQL_MESSAGE);
+         	return 0;
+  	}
+      	if(SQL_NOTFOUND){
+               	yfquestion("Hiçbir esas bulunmamýþtýr");
+               	return 0;
+       	}
+	if((mbuf = (char**)malloc(count*sizeof(char*)))==NULL){
+		yfquestion("Bellek yetersiz");
+		return 0;
+	}
+	if((mdaire = (char**)malloc(count*sizeof(char*)))==NULL){
+		yfquestion("Bellek yetersiz");
+		free(mbuf);
+		return 0;
+	}
+	if (kendi){
+		EXEC SQL DECLARE kgkendicur CURSOR FOR
+			SELECT esasno,daireno
+			FROM kavram
+			WHERE
+				(daireno=:nakeddaire OR 
+				daireno = :dresseddaire) AND
+		  		(kavram = :kavram OR kavram = :dkavram)
+			ORDER BY esasno;
+		;
+	}else{
+		EXEC SQL DECLARE kgcur CURSOR FOR
+			SELECT esasno,daireno
+			FROM kavram
+			WHERE
+		  		(kavram = :kavram OR kavram = :dkavram)
+			ORDER BY esasno;
+		;
+	}
+	if(kendi)EXEC SQL OPEN kgkendicur;
+	else EXEC SQL OPEN kgcur;
+        if(SQL_ERROR || SQL_NOTFOUND){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+               	yfquestion(SQL_MESSAGE);
+		free(mbuf);
+		free(mdaire);
+               	return 0;
+       	}
+	for(i=0; i < count; i++){
+		if(kendi)EXEC SQL 
+			FETCH kgkendicur INTO :esasno:ind0, :daireno:ind1;
+		else EXEC SQL FETCH kgcur INTO :esasno:ind0, :daireno:ind1;
+        	if(SQL_ERROR || SQL_NOTFOUND){
+			ntlog(LOG_EMSAL, SQL_MESSAGE);
+               		yfquestion(SQL_MESSAGE);
+			free(mbuf);
+			free(mdaire);
+               		return 0;
+       		}
+		mbuf[i] = strdup(esasno);
+		mdaire[i] = strdup(daireno);
+	}
+	if(kendi)EXEC SQL CLOSE kgkendicur;
+	else EXEC SQL CLOSE kgcur;
+
+	while(1){
+		for(i=0; i<16;i++){
+			strcpy(fkara1->ifs[i].text,"");
+			fkara1->ifs[i].show = 1;
+		}
+		for(i = pointer;i<pointer+16;i++){
+			if(i>=count){
+				sprintf(fkara1->ifs[i-pointer].text, "");
+				fkara1->ifs[i-pointer].show = 0;
+			}else{
+			sprintf(fkara1->ifs[i-pointer].text,"%3s | ",mdaire[i]);
+			strncat(fkara1->ifs[i-pointer].text,mbuf[i],9);
+			}
+		}
+		sprintf(fkara1->lines[0],
+				"Kavram ile Arama          "
+				"                                     "
+				" Sayfa: %u/%u",pointer/16+1, (count-1)/16+1);
+		sprintf(fkara1->lines[1],
+				"Daire: %s      ",kendi?daire:"tüm daireler");
+		strncpy(buf,kavram,40);
+		buf[40]=0;
+		strip(buf);
+		if(strlen(buf)>40)strcat(buf,"...");
+		sprintf(fkara1->lines[2],
+				"Kavram: %s",buf);
+		showform(fkara1);
+		outputform(fkara1);
+		stat = supermenu(fkara1,stat);
+		if(stat == 0xffff){
+			pointer+=16;
+			if(pointer>=count-1)pointer-=16;
+			stat = 0;
+			continue;
+		}
+		if(stat == 0xfffd){
+			pointer-=16;
+			if(pointer<0)pointer=0;
+			stat = 0;
+			continue;
+		}
+		if(stat == 0xfffe)break;
+		if(stat > 0xf000 && stat < (0xf000 + 0xff)){
+			quit = 0;
+			for(i = 0; i <count;i++){
+				if((unsigned char)mbuf[i][0]==(stat - 0xf000)){
+					pointer = i - i%16;	
+					quit=1;
+					break;
+				}
+			}
+			if(quit)stat = i%16;
+			else stat = 0;
+			continue;
+		}
+		if(stat > 0xf000){stat=0;continue;}
+		kgmetin(mbuf[pointer+stat], mdaire[pointer+stat]);
+	}
+	for(i = 0;i<count;i++){
+		free(mbuf[i]);
+		free(mdaire[i]);
+	}
+	free(mbuf);
+	free(mdaire);
+}
+/*+++++++++++++++++++++++++++++++++++++++++++++++++++++
++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+/*--------------------------------------------*/
+int
+kgmetin(iesas, idaire)
+char *iesas;
+char *idaire;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char daireno[5];
+char esasno[10];
+char kavram[76];
+
+char kmetin[1024*100];
+char kdaireno[5];
+char kesasno[10];
+char dkesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+char nakeddaire[5];
+char dresseddaire[5];
+EXEC SQL END DECLARE SECTION;
+
+	strcpy(kesasno,iesas);
+	strcpy(kdaireno,idaire);
+	strcpy(dkesasno,kesasno);
+	dress(dkesasno,9);
+	strip(kesasno);
+	strcpy(nakeddaire,kdaireno);
+	strcpy(dresseddaire,kdaireno);
+	strip(nakeddaire);
+	/* it should be 4 !!!!!
+	 * dunno why but it works with 3.
+	 * a loosy code, I know it.
+	 */
+	dress(dresseddaire,3);
+        yfmessage("Lütfen bekleyiniz...");
+	EXEC SQL SELECT metin INTO :kmetin:ind0
+		FROM karar
+		WHERE
+			(esasno = :kesasno OR esasno = :dkesasno) AND
+			(daireno = :nakeddaire OR daireno = :dresseddaire)
+	;
+        if(SQL_ERROR){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+          	yfquestion(SQL_MESSAGE);
+         	return 0;
+  	}
+       	if(SQL_NOTFOUND){
+       		yfquestion(SQL_MESSAGE);
+       		return 0;
+  	}
+	yfmessage(" ");
+	
+	yfmore(kmetin,"Devam etmek için RETURN ");
+}
+/*-------------------------------------------------------------
+	        ************ kanun *************
+-------------------------------------------------------------*/
+int kanaragoster(char *ikanun);
+int kanaragoster2(char *ikanun, char *madde);
+int kangmetin(char *dno, char *iesas);
+
+kanara()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char daireno[3];
+char esasno[10];
+char donem[2];
+char madde[16];
+char kanun[256];
+long kanunno;
+
+/*char kmetin[1024*100];
+*/
+char kdaireno[4];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+long count1;
+char nakeddaire[4];
+char dresseddaire[4];
+EXEC SQL END DECLARE SECTION;
+
+	char **mbuf;
+	long *mcount;
+	long *mkanunno;
+	int i,k;
+	int stat = 0;
+	int quit = 0;
+	int pointer;
+	int kendi;
+
+	nthareket("emsal: kanun arama");
+kanarabootstrap:
+	if(daire[0]=='t')kendi = 0;
+	else kendi = 1;
+
+	stat = quit = pointer = 0;
+	clearform(fkanara);
+
+	strcpy(nakeddaire,daire);
+	strcpy(dresseddaire,daire);
+	strip(nakeddaire);
+	dress(dresseddaire,3);
+        yfmessage("Lütfen bekleyiniz...");
+	if(kendi){
+		EXEC SQL SELECT COUNT(DISTINCT kanun) INTO :count:ind0
+			FROM kanun
+			WHERE (daireno = :dresseddaire OR
+				daireno = :nakeddaire)
+		;
+	}else{
+		EXEC SQL SELECT COUNT(DISTINCT kanun) INTO :count:ind0
+			FROM kanun
+		;
+	}
+        if(SQL_ERROR){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+          	yfquestion(SQL_MESSAGE);
+         	return 0;
+  	}
+      	if(SQL_NOTFOUND || count == 0){
+               	yfquestion("Hiçbir kanun bulunmamýþtýr");
+		strcpy(daire,"tüm");
+               	return 0;
+       	}
+	if((mbuf = (char**)malloc(count*sizeof(char*)))==NULL){
+		yfquestion("Bellek yetersiz");
+		return 0;
+	}
+	if((mcount = (long*)malloc(count*sizeof(long)))==NULL){
+		free(mbuf);
+		yfquestion("Bellek yetersiz");
+		return 0;
+	}
+	if((mkanunno = (long*)malloc(count*sizeof(long)))==NULL){
+		free(mbuf);
+		free(mcount);
+		yfquestion("Bellek yetersiz");
+		return 0;
+	}
+
+	if(kendi){
+		EXEC SQL DECLARE kancur CURSOR FOR
+			SELECT kanun, count(kanun), kanunno
+			FROM kanun
+			WHERE (daireno = :dresseddaire OR daireno=:nakeddaire)
+			GROUP BY kanun,kanunno
+			ORDER BY kanun
+		;
+	}else{
+		EXEC SQL DECLARE kankendicur CURSOR FOR
+			SELECT kanun, count(kanun), kanunno
+			FROM kanun
+			GROUP BY kanun,kanunno
+			ORDER BY kanun
+		;
+	}
+	if(kendi)EXEC SQL OPEN kancur;
+	else EXEC SQL OPEN kankendicur;
+
+        if(SQL_ERROR || SQL_NOTFOUND){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+		free(mbuf);
+		free(mcount);
+		free(mkanunno);
+               	yfquestion(SQL_MESSAGE);
+               	return 0;
+       	}
+	for(i = 0; i < count; i++){
+		if(kendi)EXEC SQL FETCH kancur INTO :kanun:ind0, :count1:ind2,
+					:kanunno:ind3;
+		else EXEC SQL FETCH kankendicur INTO :kanun:ind0, :count1:ind2,
+					:kanunno:ind3;
+        	if(SQL_ERROR || SQL_NOTFOUND){
+			ntlog(LOG_EMSAL, SQL_MESSAGE);
+			free(mbuf);
+			free(mcount);
+			free(mkanunno);
+               		yfquestion(SQL_MESSAGE);
+               		return 0;
+		}
+		mbuf[i] = strdup(kanun);
+		mcount[i] = count1;
+		mkanunno[i] = kanunno;
+	}
+	if(kendi) EXEC SQL CLOSE kancur;
+	else EXEC SQL CLOSE kankendicur;
+	while(1){
+		for(i=0; i<15;i++){
+			strcpy(fkanara->ifs[i].text,"");
+			fkanara->ifs[i].show = 1;
+		}
+		for(i = pointer; i < pointer + 15; i++){
+			if(i >= count){
+				strcpy(fkanara->ifs[i-pointer].text,"");
+				fkanara->ifs[i-pointer].show = 0;
+			}else{
+			sprintf(fkanara->ifs[i-pointer].text,
+				"%4u | %8u | ",mcount[i], mkanunno[i]);
+			strncat(fkanara->ifs[i-pointer].text,mbuf[i],57);
+			}
+		}
+		sprintf(fkanara->lines[0],
+				"Kanun ile Arama          "
+				"                                     "
+				" Sayfa: %u/%u",pointer/15+1, (count-1)/15+1);
+		sprintf(fkanara->lines[1],
+				"Daire: %s      ",kendi?daire:"tüm daireler");
+		showform(fkanara);
+		outputform(fkanara);
+		stat = supermenu(fkanara,stat);
+		if(stat == 0xffff){
+			pointer+=15;
+			if(pointer>=count-1)pointer-=15;
+			stat = 0;
+			continue;
+		}
+		if(stat == 0xfffd){
+			pointer-=15;
+			if(pointer<0)pointer=0;
+			stat = 0;
+			continue;
+		}
+		if(stat == 0xfffc){
+			dosetdaire();
+			goto kanarabootstrap;
+		}
+		if(stat == 0xfffe)break;
+		if(stat > 0xf000 && stat < (0xf000 + 0xfff)){
+			quit = 0;
+			for(i = 0; i <count;i++){
+				if((unsigned char)mbuf[i][0]==(stat - 0xf000)){
+					pointer = i - i%15;	
+					quit = 1;
+					break;
+				}
+			}
+			if(quit)stat = i%15;
+			else stat = 0;
+			continue;
+		}
+		kanaragoster(mbuf[pointer+stat]);
+	}
+	for(i = 0;i<count;i++)free(mbuf[i]);
+	free(mbuf);
+	free(mcount);
+}
+/*--------------------------------------------*/
+kanaragoster(ikanun)
+char *ikanun;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char daireno[3];
+char esasno[10];
+char donem[2];
+char madde[16];
+char kanun[256];
+
+/*
+char kmetin[1024*100];
+*/
+char kdaireno[4];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+long count1;
+char nakeddaire[4];
+char dresseddaire[4];
+char buf[256];
+EXEC SQL END DECLARE SECTION;
+
+	char **mbuf;
+	long *mcount;
+	int i,k;
+	int stat = 0;
+	int quit = 0;
+	int pointer;
+	int kendi;
+
+	strcpy(kanun, ikanun);
+	kanun[255]=0;
+
+kangarabootstrap:
+	if(daire[0]=='t')kendi = 0;
+	else kendi = 1;
+
+	stat = quit = pointer = 0;
+	clearform(fkanara);
+
+	strcpy(nakeddaire,daire);
+	strcpy(dresseddaire,daire);
+	strip(nakeddaire);
+	dress(dresseddaire,3);
+        yfmessage("Lütfen bekleyiniz...");
+	if(kendi){
+		EXEC SQL SELECT COUNT(DISTINCT madde) INTO :count:ind0
+			FROM kanun
+			WHERE (daireno = :dresseddaire OR
+				daireno = :nakeddaire)
+				AND kanun = :kanun
+		;
+	}else{
+		EXEC SQL SELECT COUNT(DISTINCT madde) INTO :count:ind0
+			FROM kanun
+			WHERE kanun = :kanun
+		;
+	}
+        if(SQL_ERROR){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+          	yfquestion(SQL_MESSAGE);
+         	return 0;
+  	}
+      	if(SQL_NOTFOUND || count == 0){
+               	yfquestion("Bu kanunla ilgili hiçbir madde bulunmamýþtýr");
+		strcpy(daire,"tüm");
+               	return 0;
+       	}
+	if((mbuf = (char**)malloc(count*sizeof(char*)))==NULL){
+		yfquestion("Bellek yetersiz");
+		return 0;
+	}
+	if((mcount = (long*)malloc(count*sizeof(long)))==NULL){
+		free(mbuf);
+		yfquestion("Bellek yetersiz");
+		return 0;
+	}
+
+	if(kendi){
+		EXEC SQL DECLARE kangcur CURSOR FOR
+			SELECT madde, count(madde)
+			FROM kanun
+			WHERE 
+				(daireno = :dresseddaire OR daireno=:nakeddaire)
+				AND
+				kanun = :kanun
+			GROUP BY madde
+			ORDER BY madde
+		;
+	}else{
+		EXEC SQL DECLARE kangkendicur CURSOR FOR
+			SELECT madde, count(madde)
+			FROM kanun
+			WHERE kanun = :kanun
+			GROUP BY madde
+			ORDER BY madde
+		;
+	}
+	if(kendi)EXEC SQL OPEN kangcur;
+	else EXEC SQL OPEN kangkendicur;
+
+        if(SQL_ERROR || SQL_NOTFOUND){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+		free(mbuf);
+		free(mcount);
+               	yfquestion(SQL_MESSAGE);
+               	return 0;
+       	}
+	for(i = 0; i < count; i++){
+		if(kendi)EXEC SQL FETCH kangcur INTO :madde:ind0, :count1:ind2;
+		else EXEC SQL FETCH kangkendicur INTO :madde:ind0, :count1:ind2;
+        	if(SQL_ERROR || SQL_NOTFOUND){
+			ntlog(LOG_EMSAL, SQL_MESSAGE);
+			free(mbuf);
+			free(mcount);
+               		yfquestion(SQL_MESSAGE);
+               		return 0;
+		}
+		mbuf[i] = strdup(madde);
+		mcount[i] = count1;
+	}
+	if(kendi) EXEC SQL CLOSE kangcur;
+	else EXEC SQL CLOSE kangkendicur;
+	while(1){
+		for(i=0; i<16;i++){
+			strcpy(fkanara1->ifs[i].text,"");
+			fkanara1->ifs[i].show = 1;
+		}
+		for(i = pointer; i < pointer + 16; i++){
+			if(i >= count){
+				strcpy(fkanara1->ifs[i-pointer].text,"");
+				fkanara1->ifs[i-pointer].show = 0;
+			}else{
+			sprintf(fkanara1->ifs[i-pointer].text,
+				"%3u | %s",mcount[i],mbuf[i]);
+			}
+		}
+		sprintf(fkanara1->lines[0],
+				"Kanun ile Arama          "
+				"                                     "
+				" Sayfa: %u/%u",pointer/16+1, (count-1)/16+1);
+		sprintf(fkanara1->lines[1],
+				"Daire: %s      ",kendi?daire:"tüm daireler");
+		strncpy(buf,kanun,40);
+		buf[40]=0;
+		if(strlen(kanun)>40)strcat(buf,"...");
+		sprintf(fkanara1->lines[2],
+				"Kanun: %s",buf);
+		showform(fkanara1);
+		outputform(fkanara1);
+		stat = supermenu(fkanara1,stat);
+		if(stat == 0xffff){
+			pointer+=16;
+			if(pointer>=count-1)pointer-=16;
+			stat = 0;
+			continue;
+		}
+		if(stat == 0xfffd){
+			pointer-=16;
+			if(pointer<0)pointer=0;
+			stat = 0;
+			continue;
+		}
+		if(stat == 0xfffc){
+			/*dosetdaire();
+			goto kangarabootstrap;*/
+			stat = 0;
+			continue;
+		}
+		if(stat == 0xfffe)break;
+		if(stat > 0xf000 && stat < (0xf000 + 0xfff)){
+			quit = 0;
+			for(i = 0; i <count;i++){
+				if((unsigned char)mbuf[i][0]==(stat - 0xf000)){
+					pointer = i - i%16;	
+					quit = 1;
+					break;
+				}
+			}
+			if(quit)stat = i%16;
+			else stat = 0;
+			continue;
+		}
+		kanaragoster2(kanun,mbuf[pointer+stat]);
+	}
+	for(i = 0;i<count;i++)free(mbuf[i]);
+	free(mbuf);
+	free(mcount);
+
+}
+/*--------------------------------------------*/
+kanaragoster2(ikanun,imadde)
+char *ikanun;
+char *imadde;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char daireno[4];
+char esasno[10];
+char donem[2];
+char madde[16];
+char kanun[256];
+
+char kmetin[1024*100];
+char kdaireno[4];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+long count1;
+char nakeddaire[4];
+char dresseddaire[4];
+char buf[256];
+EXEC SQL END DECLARE SECTION;
+
+	int i, k;
+	int quit = 0;
+	int stat = 0;
+	int pointer;
+	char **mbuf;
+	char **mbuf1;
+	int kendi;
+
+	strcpy(kanun, ikanun);
+	strcpy(madde, imadde);
+	/*dress(kanun,255);*/
+
+k2bootstrap:
+	if(daire[0]=='t') kendi = 0;
+	else kendi = 1;
+
+	stat = quit = pointer = 0;
+	showform(fkanara2);
+	clearform(fkanara2);
+
+        yfmessage("Lütfen bekleyiniz...");
+	strcpy(nakeddaire,daire);
+	strcpy(dresseddaire,daire);
+	strip(nakeddaire);
+	dress(dresseddaire,3);
+        yfmessage("Lütfen bekleyiniz...");
+	if(kendi){
+		EXEC SQL SELECT COUNT(DISTINCT esasno) INTO :count:ind0
+			FROM kanun
+			WHERE
+				(daireno=:nakeddaire OR 
+				 daireno = :dresseddaire) AND
+		  		kanun = :kanun AND
+		  		madde = :madde
+		;
+	}else{
+		EXEC SQL SELECT COUNT(DISTINCT esasno) INTO :count:ind0
+			FROM kanun
+			WHERE
+		  		kanun = :kanun AND
+		  		madde = :madde
+		;
+	}
+        if(SQL_ERROR){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+                yfquestion(SQL_MESSAGE);
+                return 0;
+        }
+        if(SQL_NOTFOUND || count == 0){
+                yfquestion(
+		  "Bu kanunla ve madde ile ilgili hiçbir madde bulunmamýþtýr");
+                strcpy(daire,"tüm");
+                return 0;
+        }
+        if((mbuf = (char**)malloc(count*sizeof(char*)))==NULL){
+                yfquestion("Bellek yetersiz");
+                return 0;
+        }
+        if((mbuf1 = (char**)malloc(count*sizeof(char*)))==NULL){
+		free(mbuf);
+                yfquestion("Bellek yetersiz");
+                return 0;
+        }
+	if(kendi){
+		EXEC SQL DECLARE kang2kendicur CURSOR FOR
+			SELECT esasno, daireno 
+			FROM kanun
+			WHERE
+				(daireno=:nakeddaire OR 
+				 daireno = :dresseddaire) AND
+		  		kanun = :kanun AND
+		  		madde = :madde
+		;
+	}else{
+		EXEC SQL DECLARE kang2cur CURSOR FOR
+			SELECT esasno, daireno
+			FROM kanun
+			WHERE
+		  		kanun = :kanun AND
+		  		madde = :madde
+		;
+	}
+        if(kendi)EXEC SQL OPEN kang2kendicur;
+        else EXEC SQL OPEN kang2cur;
+        if(SQL_ERROR || SQL_NOTFOUND){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+                free(mbuf);
+                yfquestion(SQL_MESSAGE);
+                return 0;
+        }
+	for(i = 0; i < count; i++){
+		if(kendi)
+			EXEC SQL FETCH kang2kendicur 
+				INTO :esasno:ind1, :daireno:ind2;
+		else
+			EXEC SQL FETCH kang2cur 
+				INTO :esasno:ind1, :daireno:ind2;
+                if(SQL_ERROR || SQL_NOTFOUND){
+			ntlog(LOG_EMSAL, SQL_MESSAGE);
+                        free(mbuf);
+			free(mbuf1);
+                        yfquestion(SQL_MESSAGE);
+                        return 0;
+                }
+                mbuf[i] = strdup(esasno);
+		mbuf1[i] = strdup(daireno);
+	}
+
+        if(kendi) EXEC SQL CLOSE kang2kendicur;
+        else EXEC SQL CLOSE kang2cur;
+	while(1){
+                for(i=0; i<16;i++){
+                        strcpy(fkanara2->ifs[i].text,"");
+                        fkanara2->ifs[i].show = 1;
+                }
+                for(i = pointer; i < pointer + 16; i++){
+                        if(i >= count){
+                                strcpy(fkanara2->ifs[i-pointer].text,"");
+                                fkanara2->ifs[i-pointer].show = 0;
+                        }else{
+                        sprintf(fkanara2->ifs[i-pointer].text,
+                                "%s",mbuf[i]);
+                        }
+                }
+                sprintf(fkanara2->lines[0],
+                                "Kanun ile Arama          "
+                                "                                     "
+                                " Sayfa: %u/%u",pointer/16+1, (count-1)/16+1);
+                sprintf(fkanara2->lines[1],
+                                "Daire: %s      ",kendi?daire:"tüm daireler");
+		strncpy(buf,kanun,40);
+		buf[40]=0;
+		if(strlen(kanun)>40)strcat(buf,"...");
+		sprintf(fkanara2->lines[2],
+				"Kanun: %s",buf);
+		sprintf(fkanara2->lines[3],"Madde: %s",madde);
+                showform(fkanara2);
+                outputform(fkanara2);
+                stat = supermenu(fkanara2,stat);
+                if(stat == 0xffff){
+                        pointer+=16;
+                        if(pointer>=count-1)pointer-=16;
+                        stat = 0;
+                        continue;
+                }
+                if(stat == 0xfffd){
+                        pointer-=16;
+                        if(pointer<0)pointer=0;
+                        stat = 0;
+                        continue;
+                }
+                if(stat == 0xfffc){
+                        stat = 0;
+                        continue;
+                }
+                if(stat == 0xfffe)break;
+                if(stat > 0xf000 && stat < (0xf000 + 0xfff)){
+                        quit = 0;
+                        for(i = 0; i <count;i++){
+                                if((unsigned char)mbuf[i][0]==(stat - 0xf000)){
+                                        pointer = i - i%16;
+                                        quit = 1;
+                                        break;
+                                }
+                        }
+                        if(quit)stat = i%16;
+                        else stat = 0;
+                        continue;
+                }
+		kangmetin(mbuf1[stat],mbuf[stat+pointer]);
+        }
+        for(i = 0;i<count;i++){
+		free(mbuf[i]);
+		free(mbuf1[i]);
+	}
+        free(mbuf);
+	free(mbuf1);
+	return 1;
+}
+/*--------------------------------------------*/
+int
+kangmetin(dno,iesas)
+char *dno;
+char *iesas;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char daireno[3];
+char esasno[10];
+char kavram[76];
+
+char kmetin[1024*100];
+char kdaireno[4];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+char nakeddaire[5];
+char dresseddaire[5];
+char dno1[10];
+EXEC SQL END DECLARE SECTION;
+	int kendi;
+
+	strcpy(nakeddaire,dno);
+	strcpy(dresseddaire,dno);
+	dress(dresseddaire,4);
+	strcpy(kesasno,iesas);
+        yfmessage("Lütfen bekleyiniz...");
+		EXEC SQL SELECT metin INTO :kmetin:ind0
+			FROM karar
+			WHERE
+				(daireno=:dresseddaire OR
+				daireno=:nakeddaire)  AND
+				esasno = :kesasno
+		;
+        		if(SQL_ERROR){
+				ntlog(LOG_EMSAL, SQL_MESSAGE);
+          			yfquestion(SQL_MESSAGE);
+         			return 0;
+  			}
+        		if(SQL_NOTFOUND){
+          			yfquestion("Dosya bulunamadý");
+         			return 0;
+  			}
+	yfmessage(" ");
+	
+	yfmore(kmetin,"Devam etmek için RETURN ");
+}
+/*-----------------------------------------------------------
+-----------------------------------------------------------*/
+dosetdaire()
+{
+	int stat;
+	
+	clearform(setdaire);
+	showform(setdaire);
+	
+	strcpy(setdaire->ifs[0].text,"tüm daireler");
+	strcpy(setdaire->ifs[1].text,"1c");
+	strcpy(setdaire->ifs[2].text,"2c");
+	strcpy(setdaire->ifs[3].text,"3c");
+	strcpy(setdaire->ifs[4].text,"4c");
+	strcpy(setdaire->ifs[5].text,"5c");
+	strcpy(setdaire->ifs[6].text,"6c");
+	strcpy(setdaire->ifs[7].text,"7c");
+	strcpy(setdaire->ifs[8].text,"8c");
+	strcpy(setdaire->ifs[9].text,"9c");
+	strcpy(setdaire->ifs[10].text,"10c");
+	strcpy(setdaire->ifs[11].text,"11c");
+	strcpy(setdaire->ifs[12].text,"1h");
+	strcpy(setdaire->ifs[13].text,"2h");
+	strcpy(setdaire->ifs[14].text,"3h");
+	strcpy(setdaire->ifs[15].text,"4h");
+	strcpy(setdaire->ifs[16].text,"5h");
+	strcpy(setdaire->ifs[17].text,"6h");
+	strcpy(setdaire->ifs[18].text,"7h");
+	strcpy(setdaire->ifs[19].text,"8h");
+	strcpy(setdaire->ifs[20].text,"9h");
+	strcpy(setdaire->ifs[21].text,"10h");
+	strcpy(setdaire->ifs[22].text,"11h");
+	strcpy(setdaire->ifs[23].text,"12h");
+	strcpy(setdaire->ifs[24].text,"13h");
+	strcpy(setdaire->ifs[25].text,"14h");
+	strcpy(setdaire->ifs[26].text,"15h");
+	strcpy(setdaire->ifs[27].text,"16h");
+	strcpy(setdaire->ifs[28].text,"17h");
+	strcpy(setdaire->ifs[29].text,"18h");
+	strcpy(setdaire->ifs[30].text,"19h");
+	strcpy(setdaire->ifs[31].text,"20h");
+	strcpy(setdaire->ifs[32].text,"21h");
+	strcpy(setdaire->ifs[33].text,"cgk");
+	strcpy(setdaire->ifs[34].text,"hgk");
+	strcpy(setdaire->ifs[35].text,"yik");
+	outputform(setdaire);
+	for(stat = 35;stat > 0;stat--){
+		if(strncmp(daire,setdaire->ifs[stat].text,
+			strlen(setdaire->ifs[stat].text))==0)break;
+	}
+	while(1){
+		outputform(setdaire);
+		stat = supermenu(setdaire,stat);
+		if (stat == 0xfffe)break;
+		if (stat < 0xf000){
+			strcpy(daire,setdaire->ifs[stat].text);
+			break;
+		}
+		if(stat == 0xffff){
+			stat = 35;
+			/*stat = 0;*/
+			continue;
+		}
+		stat = 0;
+	}
+}
+/*-----------------------------------------------------------
+-----------------------------------------------------------*/
+int
+esasara()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char daireno[3];
+char esasno[10];
+char kavram[76];
+
+char kmetin[1024*100];
+char kdaireno[4];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+char nakeddaire[5];
+char dresseddaire[5];
+char dno1[10];
+EXEC SQL END DECLARE SECTION;
+
+	int stat = 0;
+	char buf[20];
+
+
+
+	clearform(esara);
+	showform(esara);
+	stat = superinputform(esara, 0);
+	if ( stat == 0 )return 1;
+	strcpy(buf,esara->ifs[1].text);
+	dress(buf,9);
+	kangmetin(esara->ifs[0].text, buf);
+	return 0;
+}

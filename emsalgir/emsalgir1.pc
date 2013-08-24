@@ -1,0 +1,399 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <malloc.h>
+#include "yf.h"
+#include "tools.h"
+#include "emsalgir.h"
+EXEC SQL INCLUDE SQLCA;
+
+/* 4 global degisken su an calistigimiz karar  
+ * hakkinda bilgi tutuyor
+ */
+static char Daireno[4] = {0,0,0,0};
+static char Esasno[10] = {0,0,0,0,0,0,0,0,0,0};
+static char Kararno[9] = {0,0,0,0,0,0,0,0,0};
+static char Tarih[11]  = {0,0,0,0,0,0,0,0,0,0};
+
+kavramgir()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char daireno[5];
+char esasno[10];
+char kavram[76];
+
+/*char kmetin[1024*100];
+*/
+char kdaireno[5];
+char skdaireno[5];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+long count1;
+char nakeddaire[4];
+char dresseddaire[5];
+EXEC SQL END DECLARE SECTION;
+
+	int stat;
+	int cevap;
+	int i;
+	int start = 0;
+
+	strcpy(fkavram->ifs[0].text,daire);
+	strcpy(fkavram->ifs[1].text, Esasno);
+	strcpy(fkavram->ifs[2].text, Kararno);
+	strcpy(fkavram->ifs[3].text, Tarih);
+	fkavram->ifs[0].edit=0;
+	showform(fkavram);
+
+kavramyeniden:
+	outputform(fkavram);
+	stat = superinputform(fkavram, start);
+	if (stat == 0) return 0;
+
+	if(fkavram->ifs[1].text[0]==0){
+		yfmessage("Esas numarasý boþ");
+		start = 1;
+		goto kavramyeniden;
+	}
+	if(fkavram->ifs[2].text[0]==0){
+		yfmessage("Karar numarasý boþ");
+		start = 2;
+		goto kavramyeniden;
+	}
+	if(fkavram->ifs[3].text[0]==0){
+		yfmessage("Tarihi boþ");
+		start = 3;
+		goto kavramyeniden;
+	}
+	
+	/*--------------------------------*/
+	strcpy(Daireno, fkavram->ifs[0].text);
+	strcpy(Esasno, fkavram->ifs[1].text);
+	strcpy(Kararno, fkavram->ifs[2].text);
+	strcpy(Tarih, fkavram->ifs[3].text);
+	/*--------------------------------*/
+/***************************************************
+ * Emsal girdiklerinde karar sadece sisteme
+ * Aktarilip /home/proje dizinine kpyalanmis
+ * oluyor varitabaninda onun olup olmadigini
+ * kontrol etmek anlamsizdir
+ ***************************************************
+	/* check if the karar exists 
+	strcpy(kdaireno,fkavram->ifs[0].text);
+	strcpy(skdaireno,fkavram->ifs[0].text);
+	dress(kdaireno,4);
+	strip(skdaireno);
+	strcpy(kesasno,Esasno);
+	dress(kesasno,9);
+	strcpy(kkararno,Kararno);
+	dress(kkararno,8);
+	strcpy(ktarih,Tarih);
+	
+	yfmessage("Lütfen bekleyiniz");
+
+	EXEC SQL SELECT esasno INTO :kesasno
+		FROM karar
+		WHERE
+			(daireno = :kdaireno OR
+			 daireno = :skdaireno) AND 
+			esasno = :kesasno AND
+			kararno = :kkararno AND
+			tarih = :ktarih
+		;
+	if(SQL_ERROR){
+		yfquestion(SQL_MESSAGE);
+		return 0;
+	}
+	if(SQL_NOTFOUND){
+		yfquestion("Kararýn metni bulunmadý. Devam etmek istiyor musunuz?");
+	}
+***************************************************/
+			
+		
+
+	cevap = yfquestion("Girdiðiniz bilgiler doðru mu? (e/h)");
+	if(cevap != 'e' && cevap != 'E'){
+		yfmessage("");
+		start = 4;
+		goto kavramyeniden;
+	}
+
+
+	for(i=4; i< 15+4; i++){
+		if(fkavram->ifs[i].text[0]!=0){
+			strcpy(daireno,Daireno);
+			strcpy(esasno,Esasno);
+			strcpy(kavram,fkavram->ifs[i].text);
+			strip(kavram);
+
+			EXEC SQL INSERT INTO kavram VALUES(
+				:daireno, :esasno, :kavram
+			);
+			if(SQL_ERROR){
+				EXEC SQL ROLLBACK WORK;
+				nthareket("ROLLBACK edildi");
+				yfquestion(SQL_MESSAGE);
+				return 0;
+			}
+			if(SQL_NOTFOUND){
+				EXEC SQL ROLLBACK WORK;
+				nthareket("ROLLBACK edildi");
+				yfquestion(SQL_MESSAGE);
+				return 0;
+			}
+			nthareket("'%s' kavrami girildi",kavram);
+		}
+	}
+	EXEC SQL COMMIT WORK;
+	nthareket("COMMIT edildi");
+	for(i=4; i<15+4;i++){
+		fkavram->ifs[i].text[0]=0;
+	}
+	yfquestion("Bilgiler girildi. RETURN basýnýz");
+
+}
+
+/*-------------------------------------------------*/
+kanungir()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char daireno[4];
+char esasno[10];
+char kavram[76];
+
+/*char kmetin[1024*100];
+*/
+char kdaireno[4];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+long kkanunno;
+char kkanun[256];
+char kmadde[16];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+long count1;
+char nakeddaire[4];
+char dresseddaire[5];
+EXEC SQL END DECLARE SECTION;
+	int stat;
+	int i;
+	int cevap;
+	int start = 0;
+	char *b;
+
+	for(i=6;i<51;i+=3)fkanun->ifs[i].edit=0;
+	strcpy(fkanun->ifs[1].text, Esasno);
+	strcpy(fkanun->ifs[2].text, Kararno);
+	strcpy(fkanun->ifs[3].text, Tarih);
+	fkanun->ifs[0].edit=0;
+	showform(fkanun);
+kanunyeniden:
+
+	strcpy(fkanun->ifs[0].text, daire);
+	outputform(fkanun);
+	stat = superinputform(fkanun, start);
+	if (stat == 0) return 0;
+
+	if(fkanun->ifs[1].text[0]==0){
+		yfmessage("Esas numarasý boþ");
+		start = 1;
+		goto kanunyeniden;
+	}
+	if(fkanun->ifs[2].text[0]==0){
+		yfmessage("Karar numarasý boþ");
+		start = 2;
+		goto kanunyeniden;
+	}
+	if(fkanun->ifs[3].text[0]==0){
+		yfmessage("Tarihi boþ");
+		start = 3;
+		goto kanunyeniden;
+	}
+
+	strcpy(Esasno, fkanun->ifs[1].text);
+	strcpy(Kararno, fkanun->ifs[2].text);
+	strcpy(Tarih, fkanun->ifs[3].text);
+	
+	/* display the names of kanuns */
+	yfmessage("Lütfen bekleyiniz");
+	for (i=4;i<15*3;i+=3){
+		if (fkanun->ifs[i].text[0] == 0)continue;
+		if (fkanun->ifs[i+1].text[0] == 0){
+			yfmessage("Madde boþ olamaz");
+			start = i+1;
+			goto kanunyeniden;
+		}
+		kkanunno = atol(fkanun->ifs[i].text);
+		strcpy(kmadde,fkanun->ifs[i+1].text);
+		if (kkanunno == 0) continue;
+		EXEC SQL SELECT kanun
+			INTO :kkanun
+			FROM kanunlist
+			WHERE kanunno = :kkanunno
+		;	
+		if(SQL_ERROR){
+			yfquestion(SQL_MESSAGE);
+			break;
+		}
+		if(SQL_NOTFOUND){
+			strcpy(fkanun->ifs[i+2].text,"Kanun bulunamadý");
+			cevap = yfquestion("Girdiðiniz kanun kayýtlý deðil. Girmek istiyor musunuz? (e/h)");
+			if(cevap != 'e' && cevap != 'E'){
+				yfmessage("");
+				start = 4;
+				goto kanunyeniden;
+			}
+			b = yenikanun(kkanunno);
+			if(b != NULL)strcpy(fkanun->ifs[i+2].text,b);
+			else {
+				showform(fkanun);
+				outputform(fkanun);
+				goto kanunyeniden;
+			}
+			showform(fkanun);
+			outputform(fkanun);
+			goto kanunyeniden;
+		/* asagidaki 99 - ifs[].text degiskenin boyutu - 100
+		   karakter. tools/yf.h'den */
+		} else strncpy(fkanun->ifs[i+2].text,kkanun,99);
+	}
+	outputform(fkanun);
+	cevap = yfquestion("Girdiðiniz bilgiler doðru mu? (e/h)");
+	if(cevap != 'e' && cevap != 'E'){
+		yfmessage("");
+		start = 4;
+		goto kanunyeniden;
+	}
+	/* okay, kanunlar kontrol edildi, simdi onlari Oracle'a 
+	 * aktaralim
+	 */
+	strcpy(kdaireno, daire);
+	strcpy(kesasno, Esasno);
+	strip(kesasno);
+	strip(kdaireno);
+	for (i=4;i<15*3;i+=3){
+		if (fkanun->ifs[i].text[0] == 0)continue;
+		kkanunno = atol(fkanun->ifs[i].text);
+		strcpy(kmadde,fkanun->ifs[i+1].text);
+		strip(kmadde);
+		if (kkanunno == 0) continue;
+		EXEC SQL SELECT kanun
+			INTO :kkanun
+			FROM kanunlist
+			WHERE kanunno = :kkanunno
+		;	
+		if(SQL_ERROR || SQL_NOTFOUND){
+			yfquestion(SQL_MESSAGE);
+			EXEC SQL ROLLBACK WORK;
+			break;
+		}
+		EXEC SQL INSERT INTO kanun VALUES(
+			:kdaireno,
+			:kesasno,
+			'D',
+			:kmadde,
+			:kkanun,
+			:kkanunno
+		);
+		if(SQL_ERROR || SQL_NOTFOUND){
+			yfquestion(SQL_MESSAGE);
+			EXEC SQL ROLLBACK WORK;
+			break;
+		}
+		nthareket("'%s' kanun girildi",kkanun);
+		
+	}
+	EXEC SQL COMMIT WORK;
+	yfquestion("Bilgiler girildi. RETURN basýnýz");
+
+}
+/*-------------------------------------------------*/
+char *yenikanun(long ikanunno)
+{
+EXEC SQL BEGIN DECLARE SECTION;
+long kkanunno;
+char kkanun[256];
+EXEC SQL END DECLARE SECTION;
+
+	int stat;
+
+	showform(fyenikanun);
+	sprintf(fyenikanun->ifs[0].text, "%ld",ikanunno);
+	fyenikanun->ifs[0].edit = 0;
+	fyenikanun->ifs[1].text[0] = 0;
+	outputform(fyenikanun);
+	stat = inputform(fyenikanun);
+	if (stat){
+		kkanunno = ikanunno;
+		strcpy(kkanun, fyenikanun->ifs[1].text);
+		EXEC SQL INSERT INTO kanunlist VALUES(
+			:kkanunno, :kkanun
+		);
+		if(SQL_ERROR || SQL_NOTFOUND){
+			yfquestion(SQL_MESSAGE);
+			return NULL;
+		}
+		nthareket("'%s' yeni kanun girildi",kkanun);
+		EXEC SQL COMMIT WORK;
+	}
+	return stat? fyenikanun->ifs[1].text:NULL;
+}
+/*-------------------------------------------------*/
+tuzegir()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+char daireno[4];
+char esasno[10];
+char kavram[76];
+
+/*char kmetin[1024*100];
+*/
+char kdaireno[4];
+char kesasno[10];
+char kkararno[9];
+char ktarih[11];
+char kgiristar[11];
+char kdergi[2];
+
+long kkanunno;
+char kkanun[256];
+
+short ind0, ind1, ind2, ind3, ind4, ind5, ind6, ind7;
+
+long count;
+long count1;
+char nakeddaire[4];
+char dresseddaire[5];
+EXEC SQL END DECLARE SECTION;
+	int stat;
+	int i;
+
+	strcpy(ftuze->ifs[0].text, daire);
+	strcpy(ftuze->ifs[1].text, Esasno);
+	strcpy(ftuze->ifs[2].text, Kararno);
+	strcpy(ftuze->ifs[3].text, Tarih);
+	ftuze->ifs[0].edit=0;
+	showform(ftuze);
+	outputform(ftuze);
+	stat = inputform(ftuze);
+	if (stat == 0) return 0;
+	strcpy(Esasno, ftuze->ifs[1].text);
+	strcpy(Kararno, ftuze->ifs[2].text);
+	strcpy(Tarih, ftuze->ifs[3].text);
+	
+}

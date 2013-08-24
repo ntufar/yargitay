@@ -1,0 +1,590 @@
+#include <stdio.h>
+#include <string.h>
+#include "yf.h"
+#include "ceza.h"
+#include "tools.h"
+EXEC SQL INCLUDE SQLCA;
+
+#define	KAPATILMAYAN_FILE "kap"
+#define	TESLIM_FILE "tes"
+#define MAHIYET_FILE "mah"
+
+#define TL_TOTAL_END \
+	fprintf(of,"\n\r\n\r       toplam =%6u\n\r\n\r"\
+	"       teslim alan                   teslim eden\n",kayitno);\
+	for(stat = 0;stat <  43 - lineno;stat++)\
+		fprintf(of,"\n\r");\
+	fprintf(of,kuyruk,tarih,sayfa);
+
+
+/********************* Mahiyet List **************/
+int mahiyetliste()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+        /*------------- Kararsonucu ------------*/
+        char sdaireno[4];
+        char sesassirayil[5];
+        long sesassirano;
+        char skararsonucu[31];
+        char skarartarihi[11];
+        long skararnumarasi;
+        char sgonderilistarihi[11];
+        short sind1,sind2,sind3,sind4,sind5,sind6,sind7;
+        /*------------- Gelendosya ------------*/
+        char daireno[4];
+        char esassirayil[5];
+        long esassirano;
+        char geldigitarih[11];
+        char tebligtarih[11];
+        char tebligtarih1[11];
+        char tebligmasa[3];
+        long tebligno;
+        long esasno;
+        long kararno;
+        char gonderenmahkeme[32];
+        char sucunturu[32];
+        char temyizeden[51];
+        char tutuklu[32];
+
+        long essno;
+        long tblno;
+        long esno;
+        long karno;
+
+        short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+                ind10, ind11, ind12, ind13;
+
+	char tar1[11];
+	char tar2[11];
+	char mdbegin[11];
+	char mdend[11];
+EXEC SQL END DECLARE SECTION;
+
+        char buf[900];
+	char *baslik=
+"                           MAHÝYET LÝSTESÝ"
+"\n\r"
+"            daire no  :   %3s                                      sayfa : %4u"
+"\n\r\n\r"
+"suçun  türü                     adet     suçun  türü                     adet\n\r"
+"-----------                     ----     -----------                     ----\n\r";
+
+	char *kuyruk=
+"   (Yargitay Bilgi Islem Merkezi  Dokum Tarihi %s Sayfa  %u)\n\r";
+	long kayitno=0;
+	long topkayitno = 0;
+	long entryno = 0;
+	long lineno = 1;
+	long sayfa = 1;
+	char lastsuc[32];
+	long minesas;
+	long maxesas;
+	int firsttime=1;
+        int stat;
+	FILE *of;
+	char may[3];
+	char myil[5];
+	int imay;
+	int imyil;
+
+	strcpy(buf,home);
+	strcat(buf,"/");
+	strcat(buf,MAHIYET_FILE);
+	of = fopen(buf,"w");
+	clearform(mahlist);
+	strcpy(mahlist->ifs[0].text,daire);
+	mahlist->ifs[0].edit=(superuser)?1:0;
+	showform(mahlist);
+	outputform(mahlist);
+	stat = inputform(mahlist);
+	if(stat == 0)return 1;
+	strcpy(daire,mahlist->ifs[0].text);
+	dress(daire,3);
+	strcpy(mdbegin, mahlist->ifs[1].text);
+	may[2]=0;
+	strcpy(mdend, mahlist->ifs[2].text);
+	myil[4]=0;
+	imay = atoi(may);
+	snprintf(tar1,11,"01/%s/%s",may,myil);
+
+	yfmessage("Lütfen bekleyiniz...");
+	EXEC SQL DECLARE cur2 CURSOR FOR
+		SELECT 
+			sucunturu,
+			count(sucunturu)
+		FROM
+			gelendosya
+		WHERE
+			daireno = :daire AND
+			geldigitarih BETWEEN :mdbegin AND :mdend
+		GROUP BY sucunturu
+		ORDER BY count(sucunturu) 
+	;
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"mahiyet_list.SQL_DECLARE_CURSOR",SQL_MESSAGE);
+		yfquestion(SQL_MESSAGE);
+		return 0;
+	}
+
+	strcpy(buf,baslik);
+	striso2dos(buf);
+	fprintf(of,buf,daire,sayfa);
+	EXEC SQL OPEN cur2;
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"mahiyet_list.SQL_OPEN_CURSOR",SQL_MESSAGE);
+		yfquestion(SQL_MESSAGE);
+		return 0;
+	}
+	
+	while(1){
+		EXEC SQL FETCH cur2 INTO 
+			:sucunturu:ind1,
+			:tebligno:ind2
+		;
+		if (SQL_NOTFOUND) break;
+		if (SQL_ERROR){
+			ntlog2(LOG_CEZA,"mahiyet_list.SQL_FETCH",SQL_MESSAGE);
+			break;
+		}
+
+		if(kayitno != 0){
+			if(kayitno%2==0){fprintf(of,"\n\r");lineno++;}
+			else fprintf(of,"     ");
+			if(lineno%55==0){
+				fprintf(of,"\f");
+				sayfa++;
+				lineno++;
+				strcpy(buf,baslik);
+				fprintf(of,striso2dos(buf),daire,sayfa);
+			}
+		}
+		kayitno++;
+		fprintf(of,"%s",striso2dos(sucunturu));
+		for(stat = 0; stat < 32 - strlen(sucunturu); stat++)
+			fprintf(of," ");
+		fprintf(of,"%4u",tebligno);
+		
+		
+	}
+	EXEC SQL SELECT 
+		count(sucunturu),
+		min(esassirano),
+		max(esassirano),
+		max(geldigitarih),
+		min(geldigitarih)
+		/*LAST_DAY(:tar1)*/
+	INTO
+		:tebligno:ind1,
+		:esassirano:ind2,
+		:sesassirano:ind3,
+		:tebligtarih:ind4,
+		:tebligtarih1:ind5
+	FROM
+                        gelendosya
+        WHERE
+                        daireno = :daire AND
+                        geldigitarih BETWEEN :mdbegin AND :mdend
+	;
+	EXEC SQL CLOSE cur2;
+
+	sprintf(buf,"\n\r\n\r"
+	"            toplam =%6u\n\r"
+	"            esasìrano    : %6u - %6u\n\r"
+	"            kayìt tarihi : %s - %s\n\r",
+	tebligno, esassirano, sesassirano, tebligtarih1, tebligtarih);
+	fprintf(of,buf);
+	fprintf(of,"\f");
+
+	
+	
+	fclose(of);
+	nthareket("ceza: mahiyet listesi");
+	return 0;
+
+}
+/********************* Teslim List **************/
+int teslimlist()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+        /*------------- Kararsonucu ------------*/
+        char sdaireno[4];
+        char sesassirayil[5];
+        long sesassirano;
+        char skararsonucu[31];
+        char skarartarihi[11];
+        long skararnumarasi;
+        char sgonderilistarihi[11];
+        short sind1,sind2,sind3,sind4,sind5,sind6,sind7;
+        /*------------- Gelendosya ------------*/
+        char daireno[4];
+        char esassirayil[5];
+        long esassirano;
+        char geldigitarih[11];
+        char tebligtarih[11];
+        char tebligmasa[3];
+        long tebligno;
+        long esasno;
+        long kararno;
+        char gonderenmahkeme[32];
+        char sucunturu[32];
+        char temyizeden[51];
+        char tutuklu[32];
+
+        long essno;
+        long tblno;
+        long esno;
+        long karno;
+
+        short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+                ind10, ind11, ind12, ind13;
+
+EXEC SQL END DECLARE SECTION;
+
+        char buf[300];
+	char lastmasa[10];
+	char *baslik=
+"                                YARGITAY\n\r"
+"   TESLIM TUTANAGI\n\r\n\r"
+"   daire no: %3s     masa :%2s     teslim tarihi : %s\n\r\n\r"
+"     sira  yil esasno   tebligno             sira  yil esasno   tebligno\n\r"
+"     ---- -----------   --------             ---- -----------   --------\n\r";
+	char *kuyruk=
+"   (Yargitay Bilgi Islem Merkezi  Dokum Tarihi %s Sayfa  %u)\n\r";
+	long kayitno=0;
+	long toplamkayitno=0;
+	long lineno = 0;
+	long sayfa = 1;
+        int stat;
+	FILE *of;
+	int firsttime=1;
+
+	lastmasa[0]=0;
+	strcpy(buf,home);
+	strcat(buf,"/");
+	strcat(buf,TESLIM_FILE);
+	of = fopen(buf,"w");
+	clearform(teslimlst);
+	showform(teslimlst);
+	stat = inputform(teslimlst);
+	if(stat == 0)return 1;
+	strcpy(sgonderilistarihi, teslimlst->ifs[0].text);
+	sgonderilistarihi[10]=0;
+
+	yfmessage("Lütfen bekleyiniz...");
+	EXEC SQL DECLARE cur1 CURSOR FOR
+		SELECT 
+			kararsonucu.esassirayil,
+			kararsonucu.esassirano,
+			gelendosya.tebligno,
+			gelendosya.tebligmasa
+		FROM
+			kararsonucu,gelendosya
+		WHERE
+			gelendosya.daireno = :daire AND
+			kararsonucu.gonderilistarihi = :sgonderilistarihi AND
+			gelendosya.kararsonucu = kararsonucu.id
+			/*kararsonucu.daireno = gelendosya.daireno AND
+			kararsonucu.esassirayil = gelendosya.esassirayil AND
+			kararsonucu.esassirano = gelendosya.esassirano*/
+		ORDER BY gelendosya.tebligmasa, gelendosya.esassirayil,
+			 gelendosya.esassirano 
+		/*ORDER BY gelendosya.tebligmasa DESC*/
+	;
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"teslim_list.SQL_DECLARE_CURSOR",SQL_MESSAGE);
+		yfquestion(SQL_MESSAGE);
+		return 0;
+	}
+
+	EXEC SQL OPEN cur1;
+	if (SQL_ERROR){
+		ntlog2(LOG_CEZA,"teslim_list.SQL_OPEN_CURSOR",SQL_MESSAGE);
+		yfquestion(SQL_MESSAGE);
+		return 0;
+	}
+	while(1){
+		EXEC SQL FETCH cur1 INTO 
+			:esassirayil:ind1,
+			:esassirano:ind2,
+			:tebligno:ind3,
+			:tebligmasa:ind4
+		;
+		if (SQL_NOTFOUND) break;
+		if (SQL_ERROR){
+			ntlog2(LOG_CEZA,"teslim_liste.SQL_FETCH_CUR",SQL_MESSAGE);
+			break;
+		}
+		
+		if(firsttime==1){
+			strcpy(lastmasa,tebligmasa);firsttime=0;
+			fprintf(of,baslik,daire,tebligmasa,sgonderilistarihi);
+		}
+
+		if(strcmp(lastmasa,tebligmasa)!=0){
+			TL_TOTAL_END;
+			strcpy(lastmasa,tebligmasa);
+			toplamkayitno += kayitno;
+			kayitno=0;
+			lineno = 0;
+			sayfa = 1;
+			fprintf(of,"\f");
+			fprintf(of,baslik,daire,tebligmasa,sgonderilistarihi);
+		}
+			
+		if(kayitno != 0){
+			if(kayitno%2==0){fprintf(of,"\n\r");lineno++;}
+			else fprintf(of,"        ");
+		}
+		if(lineno != 0 && lineno%48==0){
+			fprintf(of,kuyruk,tarih,sayfa);
+			fprintf(of,"\f");
+			fprintf(of,baslik,daire,tebligmasa,sgonderilistarihi);
+			sayfa++;
+			lineno = 1;
+		}
+		kayitno++;
+		fprintf(of,"     %4u  %s %7u   %8u",
+			kayitno,esassirayil,esassirano,tebligno);
+	}
+	TL_TOTAL_END;
+	toplamkayitno += kayitno;
+	sprintf(buf,"%u dosya bulundu. "
+		"Devam için RETURN ",toplamkayitno);
+	yfquestion(buf);
+	
+	EXEC SQL CLOSE cur1;
+	fclose(of);
+	nthareket("ceza: teslim listesi");
+	return 0;
+
+}
+/********************* Kapatilmayan List **************/
+/********************* Kapatilmayan List **************/
+int kptlmynlist(guzellik)
+	int guzellik;
+{
+EXEC SQL BEGIN DECLARE SECTION;
+        /*------------- Kararsonucu ------------*/
+        char sdaireno[4];
+        char sesassirayil[5];
+        long sesassirano;
+        char skararsonucu[31];
+        char skarartarihi[11];
+        long skararnumarasi;
+        char sgonderilistarihi[11];
+        short sind1,sind2,sind3,sind4,sind5,sind6,sind7;
+        /*------------- Gelendosya ------------*/
+        char daireno[4];
+        char esassirayil[5];
+        long esassirano;
+        char geldigitarih[11];
+        char tebligtarih[11];
+        char tebligmasa[3];
+        long tebligno;
+        long esasno;
+        long kararno;
+        char gonderenmahkeme[32];
+        char sucunturu[32];
+        char temyizeden[51];
+        char tutuklu[32];
+
+        long essno;
+        long tblno;
+        long esno;
+        long karno;
+
+        short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+                ind10, ind11, ind12, ind13;
+
+EXEC SQL END DECLARE SECTION;
+
+        char buf[300];
+	char *baslik=
+		">>>>kapatilmiyan kayitlar listesi-19%s\n\r"
+		"daire no: %s\n\r\n\r";
+	char *kuyruk=
+			"\n\rYargitay Bilgi Islem Merkezi  (Dokum Tarihi "\
+			"%s  Sayfa    %u )\n\r";
+	long kayitno=0;
+	long lineno = 0;
+	long sayfa = 1;
+        int stat;
+	FILE *of;
+
+	strcpy(buf,home);
+	strcat(buf,"/");
+	strcat(buf,KAPATILMAYAN_FILE);
+	of = fopen(buf,"w");
+	clearform(fkptlmynlist);
+	showform(fkptlmynlist);
+	stat = inputform(fkptlmynlist);
+	if(stat == 0)return 1;
+	strcpy(esassirayil, fkptlmynlist->ifs[0].text);
+	esassirayil[4]=0;
+
+
+	yfmessage("Lütfen bekleyiniz...");
+	EXEC SQL DECLARE cur CURSOR FOR
+		SELECT 
+			esassirano 
+		FROM
+			gelendosya
+		WHERE
+			gelendosya.daireno = :daire AND
+			gelendosya.esassirayil = :esassirayil AND
+			gelendosya.kararsonucu = 0
+			/*NOT EXISTS(
+			SELECT id FROM kararsonucu
+			WHERE
+			gelendosya.daireno = kararsonucu.daireno AND
+			gelendosya.esassirayil = kararsonucu.esassirayil AND
+			gelendosya.esassirano = kararsonucu.esassirano)*/
+		ORDER BY esassirayil, esassirano
+	;
+
+	EXEC SQL OPEN cur;
+	fprintf(of,baslik,esassirayil,daire);
+	while(1){
+		EXEC SQL FETCH cur INTO :esassirano:ind1;
+		if (sqlca.sqlcode == 1403) break;
+		if (sqlca.sqlcode < 0) break;
+		kayitno++;
+		fprintf(of,"%10u",esassirano);
+		if(guzellik && kayitno%(8*51)==0){
+			fprintf(of,kuyruk,tarih,sayfa);
+			fprintf(of,"\f");
+			fprintf(of,baslik,esassirayil,daire);
+			lineno = 0;
+			sayfa++;
+		}else if(kayitno%8==0){fprintf(of,"\n\r");lineno++;}
+	}
+	fprintf(of,"\n\rtoplam kapatilmiyan:  %u\n\r",kayitno);
+	for(stat = 0;stat <  48 - lineno;stat++)
+		fprintf(of,"\n\r");
+	if(guzellik)fprintf(of,kuyruk,tarih,sayfa);
+	
+	EXEC SQL CLOSE cur;
+	fclose(of);
+	nthareket("ceza: kapatilmayan listesi");
+	sprintf(buf,"%u kapatýlmayan dosya bulundu. "
+		"Devam için RETURN ",kayitno);
+	yfquestion(buf);
+	return 0;
+
+}
+/********************* Kapatilmayan Ekrana List **************/
+kapatilmayan()
+{
+EXEC SQL BEGIN DECLARE SECTION;
+        /*------------- Kararsonucu ------------*/
+        char sdaireno[4];
+        char sesassirayil[5];
+        long sesassirano;
+        char skararsonucu[31];
+        char skarartarihi[11];
+        long skararnumarasi;
+        char sgonderilistarihi[11];
+        short sind1,sind2,sind3,sind4,sind5,sind6,sind7;
+        /*------------- Gelendosya ------------*/
+        char daireno[4];
+        char esassirayil[5];
+        long esassirano;
+        char geldigitarih[11];
+        char tebligtarih[11];
+        char tebligmasa[3];
+        long tebligno;
+        long esasno;
+        long kararno;
+        char gonderenmahkeme[32];
+        char sucunturu[32];
+        char temyizeden[51];
+        char tutuklu[32];
+
+        long essno;
+        long tblno;
+        long esno;
+        long karno;
+
+        short ind1,ind2,ind3,ind4,ind5,ind6,ind7,ind8,ind9,
+                ind10, ind11, ind12, ind13;
+
+EXEC SQL END DECLARE SECTION;
+
+        char buf[300];
+	char *baslik=
+		">>>>kapatilmiyan kayitlar listesi-19%s\n\r"
+		"daire no: %s\n\r\n\r";
+	long kayitno=0;
+	long lineno = 0;
+	long sayfa = 1;
+        int stat;
+	FILE *of;
+
+	strcpy(buf,home);
+	strcat(buf,"/");
+	strcat(buf,KAPATILMAYAN_FILE);
+	of = fopen(buf,"w");
+	clearform(skapatilmayan);
+	showform(skapatilmayan);
+
+	strcpy(skapatilmayan->ifs[0].text,daire);
+	skapatilmayan->ifs[0].edit = 0;
+	outputform(skapatilmayan);
+	stat = inputform(skapatilmayan);
+	if(stat == 0)return 1;
+
+        strcpy(esassirayil, skapatilmayan->ifs[1].text);
+        esassirayil[4]=0;
+        esassirano = atol(skapatilmayan->ifs[2].text);
+        sesassirano = atol(skapatilmayan->ifs[3].text);
+
+
+	yfmessage("Lütfen bekleyiniz...");
+	EXEC SQL DECLARE curkap CURSOR FOR
+		SELECT 
+			esassirano 
+		FROM
+			gelendosya
+		WHERE
+			gelendosya.daireno = :daire AND
+			gelendosya.esassirayil = :esassirayil AND
+                        (gelendosya.esassirano BETWEEN :esassirano
+                                               AND :sesassirano) AND
+
+			gelendosya.kararsonucu = 0
+		/*	NOT EXISTS(
+			SELECT id FROM kararsonucu
+			WHERE
+			gelendosya.daireno = kararsonucu.daireno AND
+			gelendosya.esassirayil = kararsonucu.esassirayil AND
+			gelendosya.esassirano = kararsonucu.esassirano)*/
+		ORDER BY esassirayil, esassirano
+	;
+
+	EXEC SQL OPEN curkap;
+	fprintf(of,baslik,esassirayil,daire);
+	while(1){
+		EXEC SQL FETCH curkap INTO :esassirano:ind1;
+		if (sqlca.sqlcode == 1403) break;
+		if (sqlca.sqlcode < 0) break;
+		kayitno++;
+		fprintf(of,"%10u",esassirano);
+		if(kayitno%8==0){fprintf(of,"\n\r");lineno++;}
+	}
+	fprintf(of,"\n\rtoplam kapatilmiyan:  %u\n\r",kayitno);
+	for(stat = 0;stat <  48 - lineno;stat++)
+		fprintf(of,"\n\r");
+	
+	EXEC SQL CLOSE curkap;
+	fclose(of);
+	sprintf(buf,"%u kapatýlmayan dosya bulundu. "
+		"Devam için RETURN ",kayitno);
+	yfquestion(buf);
+	strcpy(buf,home);
+	strcat(buf,"/");
+	strcat(buf,KAPATILMAYAN_FILE);
+	if(kayitno)yffmore(buf,"Devam etmek için RETURN ");
+	return 0;
+
+}
+/**************************************************************/

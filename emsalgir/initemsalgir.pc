@@ -1,0 +1,123 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include "yf.h"
+#include "tools.h"
+#include "emsalgir.h"
+EXEC SQL BEGIN DECLARE SECTION;
+VARCHAR uid[10];
+VARCHAR pwd[10];
+char dbname[10]="y1";
+EXEC SQL END DECLARE SECTION;
+EXEC SQL INCLUDE SQLCA;
+
+
+char user[30];
+char home[255];
+char daire[21];
+char tarih[11];
+char yil[3];
+char yyil[3];
+
+yf *fkavram;
+yf *fkanun;
+yf *ftuze;
+yf *fyenikanun;
+
+ym *maciklama;
+ym *memsalgir;
+ym *memsalgir1;
+
+initemsalgir()
+{
+	int i;
+
+	/* Get time */
+	refreshtime();
+	
+	fkavram=initform("kavram.frm");
+	if(fkavram==NULL) return 0;
+
+	fkanun=initform("kanun.frm");
+	if(fkanun==NULL) return 0;
+
+	ftuze=initform("tuze.frm");
+	if(ftuze==NULL) return 0;
+
+	fyenikanun=initform("yenikanun.frm");
+	if(fyenikanun==NULL) return 0;
+
+	maciklama = initmenu("aciklama.mnu");
+	if(maciklama==NULL)return 0;
+
+	memsalgir = initmenu("emsalgir.mnu");
+	if(memsalgir==NULL)return 0;
+
+	memsalgir1 = initmenu("emsalgir1.mnu");
+	if(memsalgir1==NULL)return 0;
+
+
+	putenv("ORACLE_SID=yargitay");
+        putenv("ORACLE_HOME=/u01/oracle/product/8.0.5");
+        putenv("LD_LIBRARY_PATH=/u01/oracle/product/8.0.5/lib");
+        putenv("NLS_LANG=TURKISH_TURKEY.WE8ISO8859P9");
+	putenv("NLS_SORT=TURKISH");
+	setenv("TERM","vt100",1);
+	strcpy(user, getlogin());
+	strcpy(home,getenv("HOME"));
+
+        strcpy (uid.arr,"emsal");
+        uid.len=strlen(uid.arr);
+        strcpy (pwd.arr,"emsal");
+        pwd.len=strlen(pwd.arr);
+
+	printf("Sisteme baðlanýlýyor...");
+	fflush(stdout);
+        EXEC SQL CONNECT :uid IDENTIFIED BY :pwd USING :dbname;
+	if (SQL_ERROR||SQL_NOTFOUND){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+		printf("\nVeritananýna baðlanýlmýyor\n");
+		printf(SQL_MESSAGE);
+		exit(0);
+	}
+	printf("baðlandý\n");
+
+	printf("Kullanýcý '%s' tanýtýlýyor...",user);
+	fflush(stdout);
+	dress(user,20);
+        EXEC SQL
+		 select dairekodu into :daire from genel.kullanicilar where
+                	kullanicikodu = :user ;
+	if(SQL_ERROR){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+		printf("\n%s\n",SQL_MESSAGE);
+		exit(1);
+	}
+        if (SQL_NOTFOUND){
+	 	printf("\n'%s' kullanýcýnýn veri düzeltme hakký yoktur\n",
+				strip(user));
+		nthareket("emsalgir: %s kullanicinin baglanmasi rededildi",strip(user));
+		exit(1);
+	}
+	daire[3]=0;
+	printf("tamam\n");
+
+        inityf();
+	nthareket("emsalgir:kullanici %s baglandi",strip(user));
+
+	return 1;
+
+errprint:
+	printf("\nVeritabaný eriþilmiyor\n");
+	printf(SQL_MESSAGE);
+	exit(0);
+}
+/**********************************************************/
+shutemsalgir()
+{
+	shutyf();
+	EXEC SQL COMMIT WORK RELEASE;
+}
+

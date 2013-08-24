@@ -1,0 +1,133 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include "yf.h"
+#include "tools.h"
+#include "emsal.h"
+EXEC SQL BEGIN DECLARE SECTION;
+VARCHAR uid[10];
+VARCHAR pwd[10];
+VARCHAR dbname[10];
+EXEC SQL END DECLARE SECTION;
+EXEC SQL INCLUDE SQLCA;
+
+
+char user[30];
+char home[255];
+char daire[21];
+char tarih[11];
+char yil[3];
+char yyil[3];
+int  duzeltme;
+
+yf *sm;
+yf *fkara;
+yf *fkara1;
+yf *fkanara;
+yf *fkanara1;
+yf *fkanara2;
+yf *setdaire;
+yf *esara;
+ym *emsalmenu;
+ym *aciklama;
+
+initemsal()
+{
+	int i;
+
+	/* Get time */
+	refreshtime();
+	
+	sm=initform("sm.frm");
+	if(sm==NULL) return 0;
+
+	fkara = initform("kara.frm");
+	if(fkara == NULL) return 0;
+	fkara1 = initform("kara1.frm");
+	if(fkara1 == NULL) return 0;
+
+	fkanara = initform("kanara.frm");
+	if(fkanara == NULL) return 0;
+	fkanara1 = initform("kanara1.frm");
+	if(fkanara1 == NULL) return 0;
+	fkanara2 = initform("kanara2.frm");
+	if(fkanara2 == NULL) return 0;
+
+	setdaire = initform("setdaire.frm");
+	if(setdaire == NULL) return 0;
+
+	esara = initform("esara.frm");
+	if(esara == NULL) return 0;
+
+	aciklama = initmenu("aciklama.mnu");
+	if(aciklama == NULL) return 0;
+
+	emsalmenu = initmenu("emsal.mnu");
+	if(emsalmenu == NULL) return 0;
+
+	putenv("ORACLE_SID=y1");
+        putenv("ORACLE_HOME=/u01/oracle/product/8.0.5");
+        putenv("LD_LIBRARY_PATH=/u01/oracle/product/8.0.5/lib");
+        putenv("NLS_LANG=TURKISH_TURKEY.WE8ISO8859P9");
+	putenv("NLS_SORT=TURKISH");
+	setenv("TERM","vt100",1);
+	strcpy(user, getlogin());
+	strcpy(home,getenv("HOME"));
+
+        strcpy (uid.arr,"emsal");
+        uid.len=strlen(uid.arr);
+        strcpy (pwd.arr,"emsal");
+        pwd.len=strlen(pwd.arr);
+        strcpy (dbname.arr,"y1");
+        dbname.len=strlen(dbname.arr);
+
+	printf("Sisteme baðlanýlýyor...");
+	fflush(stdout);
+        EXEC SQL CONNECT :uid IDENTIFIED BY :pwd USING :dbname;
+	if (SQL_ERROR||SQL_NOTFOUND){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+		printf("\nVeritananýna baðlanýlmýyor\n");
+		printf(SQL_MESSAGE);
+		exit(0);
+	}
+	printf("baðlandý\n");
+
+	printf("Kullanýcý '%s' tanýtýlýyor...",user);
+	fflush(stdout);
+	dress(user,20);
+        EXEC SQL
+		 select dairekodu into :daire from genel.kullanicilar where
+                	kullanicikodu = :user ;
+	if(SQL_ERROR){
+		ntlog(LOG_EMSAL, SQL_MESSAGE);
+		printf("\n%s\n",SQL_MESSAGE);
+		exit(1);
+	}
+        if (SQL_NOTFOUND){
+		duzeltme = 0;
+		strcpy(daire,"tüm");
+	 	printf("\n'%s' kullanýcýnýn veri düzeltme hakký yoktur\n",
+				strip(user));
+	}else duzeltme = 1;
+	daire[3]=0;
+	printf("tamam\n");
+
+        inityf();
+	nthareket("emsal:kullanici %s baglandi",strip(user));
+
+	return 1;
+
+errprint:
+	printf("\nVeritabaný eriþilmiyor\n");
+	printf(sqlca.sqlerrm.sqlerrmc);
+	exit(0);
+}
+/**********************************************************/
+shutemsal()
+{
+	shutyf();
+	EXEC SQL COMMIT WORK RELEASE;
+}
+

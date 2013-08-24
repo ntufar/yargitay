@@ -1,0 +1,85 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include "yf.h"
+#include "tools.h"
+#include "sorgu.h"
+EXEC SQL BEGIN DECLARE SECTION;
+VARCHAR uid[10];
+VARCHAR pwd[10];
+char	dbname[10] = "y1";
+EXEC SQL END DECLARE SECTION;
+EXEC SQL INCLUDE SQLCA;
+
+yf *csor;
+yf *hsor;
+
+ym *maciklama;
+ym *msorgumenu;
+
+char user[30];
+char home[255];
+char daire[21];
+char tarih[11];
+char yil[3];
+char yyil[3];
+
+initsorgu()
+{
+	int i;
+
+	/* Get time */
+	refreshtime();
+	
+	csor = initform("csor.frm");
+	if(csor == NULL)return 0;
+	hsor = initform("hsor.frm");
+	if(hsor == NULL)return 0;
+
+	maciklama = initmenu("aciklama.mnu");
+	if (maciklama == NULL)return 0;
+
+	msorgumenu = initmenu("sorgumenu.mnu");
+	if (msorgumenu == NULL)return 0;
+
+	putenv("ORACLE_SID=yargitay");
+        putenv("ORACLE_HOME=/u01/oracle/product/8.0.5");
+        putenv("LD_LIBRARY_PATH=/u01/oracle/product/8.0.5/lib");
+        putenv("NLS_LANG=TURKISH_TURKEY.WE8ISO8859P9");
+	putenv("TERM=vt100");
+	strcpy(user, getlogin());
+	strcpy(home,getenv("HOME"));
+
+        strcpy (uid.arr,"sorgu");
+        uid.len=strlen(uid.arr);
+        strcpy (pwd.arr,"sorgu");
+        pwd.len=strlen(pwd.arr);
+
+	printf("Sisteme baðlanýlýyor...");
+	fflush(stdout);
+        EXEC SQL CONNECT :uid IDENTIFIED BY :pwd USING :dbname;
+	if(SQL_ERROR || SQL_NOTFOUND){
+		ntlog(LOG_SORGU, SQL_MESSAGE);
+		printf("\nVeritananýna baðlanýlmýyor\n");
+		printf(SQL_MESSAGE);
+		printf("\n");
+		exit(1);
+	}
+		
+	printf("baðlandý\n");
+	
+	inityf();
+	nthareket("sorgu: kullanici %s baglandi",getlogin());
+
+	return 1;
+
+}
+/**********************************************************/
+shutsorgu()
+{
+	shutyf();
+	EXEC SQL COMMIT WORK RELEASE;
+}
+
