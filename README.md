@@ -11,4 +11,5 @@ My project for Turkish Supreme Court, court decisions managing system I did in 1
 * ctx/ contains context search libraries
 
 I release this in kind memory of Mehmet Tiftikçi, our leader then who sadly passed away in 2008.
-http://www.aykirihaber.org/hukuk/493-cumhuriyetin-savcisi-oldu.html
+* http://www.aykirihaber.org/hukuk/493-cumhuriyetin-savcisi-oldu.html
+* http://www.hataygazetesi.com/tiftikci-ailesinin-aci-gunu
